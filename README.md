@@ -1,5 +1,6 @@
 # SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform
 SecureCart is a full-stack, cloud-native eCommerce platform built to demonstrate secure, scalable, and production-ready web application development. The application allows users to browse products, manage shopping carts, place orders, and view order history, administrators can securely manage products, users &amp; orders through a role-based dashboard.
+
 🚀 Features
 
 User Authentication & Authorization
