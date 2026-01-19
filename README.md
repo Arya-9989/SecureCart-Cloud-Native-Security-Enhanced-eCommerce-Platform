@@ -1,93 +1,88 @@
-# SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform
-SecureCart is a full-stack, cloud-native eCommerce platform built to demonstrate secure, scalable, and production-ready web application development. The application allows users to browse products, manage shopping carts, place orders, and view order history, administrators can securely manage products, users &amp; orders through a role-based dashboard.
+# SecureCart – Cloud-Native Security-Enhanced eCommerce Platform
 
-🚀 Features
+SecureCart is a full-stack, cloud-native eCommerce platform developed to demonstrate **secure, scalable, and production-ready web application development**. The platform enables users to browse products, manage shopping carts, place orders, and view order history, while administrators can securely manage products, users, and orders through a **role-based administrative dashboard**.
 
-User Authentication & Authorization
+The project follows modern software engineering practices with a strong focus on **security, modular architecture, and cloud readiness**, making it suitable for real-world deployment scenarios.
 
-Secure user registration and login
+---
 
-JWT-based authentication
+## 🚀 Features
 
-Role-based access control (Admin / Customer)
+### 🔐 User Authentication & Authorization
+- Secure user registration and login
+- JWT-based authentication mechanism
+- Role-based access control (Admin / Customer)
 
-Product Management
+### 🛍️ Product Management
+- Product listing with category support
+- Admin-only product creation, update, and deletion
+- Search and filtering functionality
 
-Product listing with categories
+### 🛒 Shopping Cart & Orders
+- Add and remove products from the cart
+- Secure checkout and order placement
+- Order history tracking for users
 
-Admin-only product create, update, and delete
+### 📊 Admin Dashboard
+- User and role management
+- Product and inventory management
+- Order monitoring and tracking
 
-Search and filtering support
+### 🛡️ Security-Oriented Design
+- Password hashing and secure credential storage
+- Protected API endpoints
+- Input validation and sanitization
+- Secure token and session handling
 
-Shopping Cart & Orders
+---
 
-Add and remove products from cart
+## 🛠️ Tech Stack
 
-Checkout and order placement
+### 🎨 Frontend
+- HTML5, CSS3
+- JavaScript
+- React.js
+- Responsive UI with dark-mode support
 
-Order history for users
+### ⚙️ Backend
+- Python
+- Django
+- Django REST Framework (DRF)
+- RESTful API-based architecture
 
-Admin Dashboard
+### 🗄️ Database
+- PostgreSQL (production environment)
+- SQLite (development environment)
 
-Manage users and roles
+### ☁️ DevOps & Cloud
+- Docker & Docker Compose
+- Git & GitHub for version control
+- CI/CD-ready architecture
+- Cloud deployment support (AWS / Azure / GCP)
 
-Manage products and inventory
+### 🔒 Security
+- JWT-based authentication
+- Role-based access control (RBAC)
+- CSRF and CORS configuration
+- OWASP Top 10 security considerations
 
-View and track customer orders
+---
 
-Security-Oriented Design
+## 📌 Project Objective
 
-Password hashing
+The objective of SecureCart is to showcase **end-to-end full-stack development** with an emphasis on **web security, cloud-native architecture, and real-world eCommerce workflows**, making it an ideal portfolio and academic project.
 
-Protected API endpoints
+---
 
-Input validation and sanitization
+## 🚧 Future Enhancements
+- Payment gateway integration (Stripe / Razorpay – test mode)
+- Email verification and password reset
+- Order invoice generation
+- Redis caching for performance optimization
+- Deployment automation using CI/CD pipelines
 
-Secure session and token handling
+---
 
-🛠️ Tech Stack
-Frontend
-
-HTML5, CSS3
-
-JavaScript
-
-React.js
-
-Responsive UI with dark-mode support
-
-Backend
-
-Python
-
-Django
-
-Django REST Framework (DRF)
-
-RESTful API architecture
-
-Database
-
-PostgreSQL (production)
-
-SQLite (development)
-
-DevOps & Cloud
-
-Docker & Docker Compose
-
-Git & GitHub
-
-CI/CD-ready architecture
-
-Cloud deployment support (AWS / Azure / GCP)
-
-Security
-
-JWT authentication
-
-Role-based access control (RBAC)
-
-CSRF & CORS configuration
-
-OWASP Top 10 security considerations
+## 👤 Author
+**Arya Shrikant Mahindrakar**  
+B.Tech – Cloud Technology & Information Security
