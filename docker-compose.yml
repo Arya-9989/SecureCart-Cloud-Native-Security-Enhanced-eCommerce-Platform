@@ -1,0 +1,73 @@
+name: securecart
+
+# Production-shaped local stack: PostgreSQL, Django API (gunicorn) and the SPA served by
+# nginx, which also reverse-proxies /api so the browser only ever talks to one origin.
+# Usage: cp .env.example .env && docker compose up --build  ->  http://localhost:8080
+
+x-hardening: &hardening
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-securecart}
+      POSTGRES_USER: ${POSTGRES_USER:-securecart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  backend:
+    <<: *hardening
+    build:
+      context: ./backend
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080}
+      DJANGO_CACHE_BACKEND: db
+      DATABASE_URL: postgres://${POSTGRES_USER:-securecart}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-securecart}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
+      NUM_PROXIES: "1"
+      SEED_DEMO: ${SEED_DEMO:-true}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
+      DEMO_CUSTOMER_PASSWORD: ${DEMO_CUSTOMER_PASSWORD:-}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-apps.payments.providers.mock.MockPaymentProvider}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    tmpfs:
+      - /tmp
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    <<: *hardening
+    build:
+      context: ./frontend
+      args:
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-true}
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    tmpfs:
+      - /tmp
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
