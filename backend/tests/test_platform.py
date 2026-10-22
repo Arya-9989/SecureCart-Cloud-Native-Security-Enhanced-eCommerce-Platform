@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import StringIO
+from unittest import mock
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -11,6 +12,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import Role, User
 from apps.catalog.models import Product
+from apps.core.views import HealthView
 from apps.orders.models import Order, OrderStatus
 from config.env import env_bool, parse_database_url
 from tests.conftest import add_to_cart, checkout
@@ -140,3 +142,23 @@ class TestSeedDemo:
             == 0
         )
         assert Product.objects.get(sku="WEA-HORIZON").stock == 0
+
+
+class TestErrorEnvelopeEverywhere:
+    """The README promises one error envelope for every API error, not just DRF's."""
+
+    def test_unknown_api_route_uses_the_envelope(self, api: APIClient) -> None:
+        response = api.get("/api/does-not-exist/")
+        assert response.status_code == 404
+        assert response["Content-Type"] == "application/json"
+        assert response.json() == {"error": {"code": "not_found", "message": "Not found."}}
+
+    def test_unhandled_error_uses_the_envelope_and_leaks_nothing(self, api: APIClient) -> None:
+        api.raise_request_exception = False
+        with mock.patch.object(HealthView, "get", side_effect=RuntimeError("db password=hunter2")):
+            response = api.get("/api/health/")
+        assert response.status_code == 500
+        assert response["Content-Type"] == "application/json"
+        assert response.json()["error"]["code"] == "server_error"
+        assert b"hunter2" not in response.content
+        assert b"Traceback" not in response.content

@@ -49,3 +49,9 @@ api: list[URLPattern | URLResolver] = [
 ]
 
 urlpatterns = [path("api/", include(api))]
+
+# Errors raised outside DRF views still answer with the API's JSON error envelope.
+handler400 = "apps.core.views.bad_request"
+handler403 = "apps.core.views.permission_denied"
+handler404 = "apps.core.views.not_found"
+handler500 = "apps.core.views.server_error"
