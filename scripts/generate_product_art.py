@@ -25,11 +25,17 @@ All eighteen pieces are lit and framed identically, as if shot in one session:
 * **One ground.** Each drawing declares its bounding box; ``frame`` scales it to a common
   visual mass and seats it on the same ground line, over a two-layer neutral shadow (a tight
   contact shadow plus a broad ambient one).
+* **One camera rule.** Things that stand (lamp, bottle, speaker, headphones, mugs...) are
+  shown front-on at eye level. Things that lie on a desk (keyboard, mouse, turntable, fitness
+  band) are shown from about 30 degrees above, as a buyer sees them on a table: their top is
+  foreshortened to half height and their front edge shows its real thickness. ``from_above``
+  applies that rule, so no tabletop object is ever drawn as a plan stood on its edge.
 * **Materials over colour.** Anodised aluminium, matte graphite, ceramic, fabric, glass and
   wood in slightly desaturated tones. Each product keeps its identity colour family. No
   text, logos or brand marks.
 """
 
+# ruff: noqa: E501 - SVG markup and path data read best unwrapped, one element per line.
 from __future__ import annotations
 
 import math
@@ -55,7 +61,9 @@ TARGET_AREA = 124_000  # equal visual mass for wide, tall and square objects
 def lin(gid: str, *stops: tuple[float, str], x2: float = 0, y2: float = 1) -> str:
     """Linear gradient from (0,0) to (x2,y2) in object-bounding-box units."""
     body = "".join(f'<stop offset="{o:g}" stop-color="{c}"/>' for o, c in stops)
-    return f'<linearGradient id="{gid}" x1="0" y1="0" x2="{x2:g}" y2="{y2:g}">{body}</linearGradient>'
+    return (
+        f'<linearGradient id="{gid}" x1="0" y1="0" x2="{x2:g}" y2="{y2:g}">{body}</linearGradient>'
+    )
 
 
 def rad(gid: str, *stops: tuple[float, str], cx: float = 0.36, cy: float = 0.3) -> str:
@@ -130,6 +138,24 @@ class Drawing:
     body: str
     bbox: tuple[float, float, float, float]  # x0, y0, x1, y1 of the artwork
     footprint: float = 0.82  # share of the drawn width that touches the ground
+    mass: float = 1.0  # visual mass relative to the set; < 1 for things that are small in life
+
+
+FORESHORTEN = 0.5  # sin(30 deg): how much a top surface shrinks seen from ~30 degrees above
+
+
+def from_above(plan: str, top: float, depth: float, slab: str) -> str:
+    """Draw a tabletop object, given as a plan (top view) starting at ``top``, from ~30 degrees.
+
+    The plan is foreshortened vertically about ``top``. ``slab`` is the object's outline in the
+    same plan coordinates; drawn ``depth`` lower and underneath, it becomes the visible front
+    and side faces, i.e. the object's thickness.
+    """
+    squash = f"translate(0 {_n(top * (1 - FORESHORTEN))}) scale(1 {FORESHORTEN})"
+    return (
+        f'<g transform="translate(0 {_n(depth)}) {squash}">{slab}</g>'
+        f'<g transform="{squash}">{plan}</g>'
+    )
 
 
 def _n(value: float) -> str:
@@ -140,7 +166,7 @@ def frame(drawing: Drawing) -> str:
     """Seat a drawing on the shared ground line with the shared light and shadows."""
     x0, y0, x1, y1 = drawing.bbox
     w, h = x1 - x0, y1 - y0
-    scale = min(MAX_W / w, MAX_H / h, math.sqrt(TARGET_AREA / (w * h)))
+    scale = min(MAX_W / w, MAX_H / h, math.sqrt(TARGET_AREA * drawing.mass / (w * h)))
     tx = CENTER_X - (x0 + w / 2) * scale
     ty = GROUND_Y - y1 * scale
     width = w * scale
@@ -184,7 +210,9 @@ def headphones() -> Drawing:
 
 
 def speaker() -> Drawing:
-    defs = cyl("shell", "#86b2ab", "#5b8b84", "#2f5651") + lin("cap", (0, "#a9cbc5"), (1, "#5f8f88"))
+    defs = cyl("shell", "#86b2ab", "#5b8b84", "#2f5651") + lin(
+        "cap", (0, "#a9cbc5"), (1, "#5f8f88")
+    )
     dots = "".join(
         f'<circle cx="{x}" cy="{y}" r="4.2" fill="#1e3d3a" opacity=".5"/>'
         for y in range(268, 430, 18)
@@ -252,13 +280,13 @@ def earbuds() -> Drawing:
 
 def turntable() -> Drawing:
     defs = flat("wood", "#9a6b48", "#4f3322") + rad("vinyl", (0, "#3a3a3e"), (1, "#0c0c0e"))
+    defs += lin("plinth", (0, "#5e3d28"), (1, "#2e1d12"))
     grooves = "".join(
         f'<circle cx="350" cy="330" r="{r}" fill="none" stroke="#4a4a50" stroke-width="1" opacity=".7"/>'
         for r in range(46, 118, 9)
     )
-    body = f"""
+    plan = f"""
 {lit('<rect x="196" y="214" width="408" height="236" rx="22" fill="url(#wood)"/>')}
-<rect x="196" y="424" width="408" height="26" rx="12" fill="#3a2418" opacity=".55"/>
 <circle cx="350" cy="330" r="124" fill="url(#alu)"/>
 <circle cx="350" cy="330" r="118" fill="url(#vinyl)"/>
 {grooves}
@@ -269,17 +297,25 @@ def turntable() -> Drawing:
 <path d="M540 256 L520 380 L452 396" fill="none" stroke="#dcdde1" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="428" y="384" width="34" height="22" rx="4" fill="#2a2a2e" transform="rotate(-14 445 395)"/>
 <circle cx="562" cy="414" r="8" fill="url(#alu)"/>
-<rect x="216" y="450" width="40" height="12" rx="4" fill="#2b1a10"/>
-<rect x="544" y="450" width="40" height="12" rx="4" fill="#2b1a10"/>
 """
-    return Drawing(defs, body, (196, 206, 604, 462), footprint=0.95)
+    depth = 34
+    slab = lit('<rect x="196" y="214" width="408" height="236" rx="22" fill="url(#plinth)"/>')
+    base = 214 + 236 * FORESHORTEN + depth
+    body = f"""
+{from_above(plan, 214, depth, slab)}
+<rect x="216" y="{_n(base - 4)}" width="40" height="12" rx="4" fill="#2b1a10"/>
+<rect x="544" y="{_n(base - 4)}" width="40" height="12" rx="4" fill="#2b1a10"/>
+"""
+    return Drawing(defs, body, (196, 214, 604, base + 8), footprint=0.95)
 
 
 # --------------------------------------------------------------------------------------
 # Wearables
 # --------------------------------------------------------------------------------------
 def smartwatch() -> Drawing:
-    defs = cyl("strap", "#575d6b", "#3a3f4b", "#1c1f26") + rad("screen", (0, "#20232b"), (1, "#050507"))
+    defs = cyl("strap", "#575d6b", "#3a3f4b", "#1c1f26") + rad(
+        "screen", (0, "#20232b"), (1, "#050507")
+    )
     body = f"""
 {lit('<rect x="338" y="120" width="124" height="150" rx="26" fill="url(#strap)"/>')}
 {lit('<rect x="338" y="330" width="124" height="140" rx="26" fill="url(#strap)"/>')}
@@ -398,7 +434,9 @@ def _mug(x: int, gid: str, glaze: str, rim: str, *, flip: bool = False) -> str:
 
 
 def mug_set() -> Drawing:
-    defs = cyl("terra", "#d9906e", "#bb6a49", "#7f3a22") + cyl("sage", "#bcd0b9", "#93b190", "#5a7a5d")
+    defs = cyl("terra", "#d9906e", "#bb6a49", "#7f3a22") + cyl(
+        "sage", "#bcd0b9", "#93b190", "#5a7a5d"
+    )
     body = _mug(178, "terra", "#f1d9c8", "#b9694a", flip=True) + _mug(
         452, "sage", "#eef3ec", "#88a586"
     )
@@ -410,7 +448,16 @@ def planter() -> Drawing:
     defs += lin("leaf", (0, "#8db884"), (1, "#3f6a3d"), x2=1, y2=1)
     defs += '<ellipse id="lf" rx="18" ry="7" fill="url(#leaf)"/>'
     leaves = ""
-    stems = [(-62, 170), (-38, 200), (-14, 215), (12, 210), (36, 195), (60, 165), (-80, 130), (80, 130)]
+    stems = [
+        (-62, 170),
+        (-38, 200),
+        (-14, 215),
+        (12, 210),
+        (36, 195),
+        (60, 165),
+        (-80, 130),
+        (80, 130),
+    ]
     for angle, length in stems:
         leaflets = "".join(
             f'<use href="#lf" transform="translate({side * 16} {-t}) rotate({side * -35})"/>'
@@ -432,7 +479,9 @@ def planter() -> Drawing:
 
 
 def candle() -> Drawing:
-    defs = lin("jar", (0, "#e7b06a"), (0.25, "#f2c88a"), (0.65, "#c88843"), (1, "#7d4a1d"), x2=1, y2=0)
+    defs = lin(
+        "jar", (0, "#e7b06a"), (0.25, "#f2c88a"), (0.65, "#c88843"), (1, "#7d4a1d"), x2=1, y2=0
+    )
     defs += lin("wax", (0, "#fffaf0"), (1, "#f0dfb8"))
     defs += (
         '<radialGradient id="flame" cx="0.5" cy="0.72" r="0.6"><stop offset="0" stop-color="#fffbe9"/>'
@@ -478,24 +527,34 @@ def keyboard() -> Drawing:
         keys.append(
             f'<rect x="{x0 + c * 34}" y="{bottom}" width="{unit}" height="{unit}" rx="6" fill="url(#kc)"/>'
         )
-    keys.append(f'<rect x="{x0 + 102}" y="{bottom}" width="232" height="{unit}" rx="6" fill="url(#kc)"/>')
+    keys.append(
+        f'<rect x="{x0 + 102}" y="{bottom}" width="232" height="{unit}" rx="6" fill="url(#kc)"/>'
+    )
     for c in range(4):
         keys.append(
             f'<rect x="{x0 + 340 + c * 34}" y="{bottom}" width="{unit}" height="{unit}" rx="6" fill="url(#kc)"/>'
         )
-    body = f"""
+    plan = f"""
 {lit('<rect x="140" y="208" width="520" height="210" rx="24" fill="url(#case)"/>')}
 <rect x="150" y="213" width="500" height="4" rx="2" fill="#fff" opacity=".22"/>
 <g filter="url(#keyshade)">{"".join(keys)}</g>
 <circle cx="636" cy="224" r="4" fill="#80b8af"/>
 """
-    return Drawing(defs, body, (140, 208, 660, 418), footprint=0.95)
+    defs += lin("caseside", (0, "#3b3e45"), (1, "#16171b"))
+    slab = '<rect x="140" y="208" width="520" height="210" rx="24" fill="url(#caseside)"/>'
+    depth = 26
+    body = from_above(plan, 208, depth, lit(slab))
+    return Drawing(defs, body, (140, 208, 660, 208 + 210 * FORESHORTEN + depth), footprint=0.95)
 
 
 def mouse() -> Drawing:
     defs = flat("shell", "#ffffff", "#d3d6dd") + cyl("side", "#a9cdc7", "#6fa199", "#3f6e67")
-    body = f"""
-{lit('<path d="M400 150 C490 150 520 230 520 320 C520 420 470 470 400 470 C330 470 280 420 280 320 C280 230 310 150 400 150 Z" fill="url(#side)"/>')}
+    outline = (
+        "M400 150 C490 150 520 230 520 320 C520 420 470 470 400 470 "
+        "C330 470 280 420 280 320 C280 230 310 150 400 150 Z"
+    )
+    plan = f"""
+{lit(f'<path d="{outline}" fill="url(#side)"/>')}
 {lit('<path d="M400 158 C478 158 506 230 506 316 C506 410 462 456 400 456 C338 456 294 410 294 316 C294 230 322 158 400 158 Z" fill="url(#shell)"/>')}
 <path d="M400 160 V286" stroke="#a7abb5" stroke-width="2.5"/>
 <path d="M298 286 C340 296 460 296 502 286" fill="none" stroke="#c9ccd4" stroke-width="2.5"/>
@@ -503,7 +562,13 @@ def mouse() -> Drawing:
 <rect x="394" y="206" width="12" height="14" rx="6" fill="#5c606b"/>
 <path d="M324 222 C334 192 354 176 378 170" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" opacity=".85"/>
 """
-    return Drawing(defs, body, (280, 150, 520, 470), footprint=0.6)
+    # Seen from the front and above: a low teal skirt shows below the white shell. A mouse is
+    # small in life, so it carries less visual mass than the keyboard beside it in the store.
+    depth = 24
+    body = from_above(plan, 150, depth, lit(f'<path d="{outline}" fill="url(#side)"/>'))
+    return Drawing(
+        defs, body, (280, 150, 520, 150 + 320 * FORESHORTEN + depth), footprint=0.72, mass=0.62
+    )
 
 
 def notebook() -> Drawing:
@@ -530,7 +595,9 @@ def notebook() -> Drawing:
 
 
 def laptop_stand() -> Drawing:
-    defs = lin("screen", (0, "#7fb4b4"), (1, "#2f6870"), x2=1, y2=1) + flat("lid", "#4b4f58", "#1f2126")
+    defs = lin("screen", (0, "#7fb4b4"), (1, "#2f6870"), x2=1, y2=1) + flat(
+        "lid", "#4b4f58", "#1f2126"
+    )
     body = f"""
 {lit('<path d="M300 352 L272 462 H300 L330 352 Z" fill="url(#alu)"/>')}
 {lit('<path d="M500 352 L528 462 H500 L470 352 Z" fill="url(#alu)"/>')}
@@ -553,7 +620,9 @@ def laptop_stand() -> Drawing:
 # Travel & outdoor
 # --------------------------------------------------------------------------------------
 def daypack() -> Drawing:
-    defs = cyl("pack", "#7ea4c4", "#4f7ca3", "#284d6c") + cyl("pocket", "#6d94b6", "#456f94", "#223f58")
+    defs = cyl("pack", "#7ea4c4", "#4f7ca3", "#284d6c") + cyl(
+        "pocket", "#6d94b6", "#456f94", "#223f58"
+    )
     body = f"""
 <path d="M372 140 C372 110 428 110 428 140" fill="none" stroke="#24384b" stroke-width="13" stroke-linecap="round"/>
 {lit('<path d="M290 220 C290 160 330 140 400 140 C470 140 510 160 510 220 V440 Q510 476 474 476 H326 Q290 476 290 440 Z" fill="url(#pack)"/>')}
@@ -569,7 +638,9 @@ def daypack() -> Drawing:
 
 
 def bottle() -> Drawing:
-    defs = cyl("coat", "#7aa6c6", "#47789c", "#22455f") + cyl("cap", "#6a6e78", "#3b3e46", "#16171b")
+    defs = cyl("coat", "#7aa6c6", "#47789c", "#22455f") + cyl(
+        "cap", "#6a6e78", "#3b3e46", "#16171b"
+    )
     body = f"""
 <path d="M372 112 C372 90 428 90 428 112" fill="none" stroke="#2a2c32" stroke-width="10"/>
 <rect x="366" y="112" width="68" height="20" rx="8" fill="#2a2c32"/>
@@ -583,7 +654,9 @@ def bottle() -> Drawing:
 
 
 def camera() -> Drawing:
-    defs = flat("body", "#ffffff", "#d2d5dc") + rad("lens", (0, "#4b5160"), (1, "#05060a"), cx=0.38, cy=0.32)
+    defs = flat("body", "#ffffff", "#d2d5dc") + rad(
+        "lens", (0, "#4b5160"), (1, "#05060a"), cx=0.38, cy=0.32
+    )
     defs += lin("stripe", (0, "#d9844e"), (1, "#dcb85a"), x2=1, y2=0)
     defs += lin("photo", (0, "#bcd6e6"), (1, "#7fa7c0"))
     body = f"""
