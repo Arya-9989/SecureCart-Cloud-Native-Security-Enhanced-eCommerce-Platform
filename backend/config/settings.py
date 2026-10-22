@@ -305,6 +305,17 @@ FREE_SHIPPING_THRESHOLD = env_str("FREE_SHIPPING_THRESHOLD", "75.00")
 FLAT_SHIPPING_FEE = env_str("FLAT_SHIPPING_FEE", "6.99")
 TAX_RATE = env_str("TAX_RATE", "0.08")
 MAX_CART_LINE_QUANTITY = env_int("MAX_CART_LINE_QUANTITY", 10)
+
+# Product images (apps.catalog.media). "s3" for MinIO/S3, "memory" for tests, or "disabled".
+MEDIA_STORAGE = env_str("MEDIA_STORAGE", "disabled")
+MEDIA_S3_ENDPOINT = env_str("MEDIA_S3_ENDPOINT", "")  # empty means AWS S3 itself
+MEDIA_S3_BUCKET = env_str("MEDIA_S3_BUCKET", "securecart-media")
+MEDIA_S3_REGION = env_str("MEDIA_S3_REGION", "us-east-1")
+MEDIA_S3_ACCESS_KEY = env_str("MEDIA_S3_ACCESS_KEY", "")
+MEDIA_S3_SECRET_KEY = env_str("MEDIA_S3_SECRET_KEY", "")
+MAX_IMAGE_UPLOAD_BYTES = env_int("MAX_IMAGE_UPLOAD_BYTES", 5 * 1024 * 1024)
+MAX_IMAGE_PIXELS = env_int("MAX_IMAGE_PIXELS", 40_000_000)
+MAX_IMAGE_EDGE = env_int("MAX_IMAGE_EDGE", 2000)
 #: Unpaid orders older than this are settled by the scheduler (stock released or reconciled).
 PENDING_ORDER_TIMEOUT_MINUTES = env_int("PENDING_ORDER_TIMEOUT_MINUTES", 30)
 SCHEDULER_PENDING_ORDERS_EVERY_SECONDS = env_int("SCHEDULER_PENDING_ORDERS_EVERY_SECONDS", 300)

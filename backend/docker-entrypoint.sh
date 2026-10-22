@@ -7,6 +7,9 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
     # as a separate release job instead and set RUN_MIGRATIONS=false here.
     python manage.py migrate --noinput
     python manage.py createcachetable
+    if [ "${MEDIA_STORAGE:-disabled}" = "s3" ]; then
+        python manage.py init_media_storage
+    fi
 fi
 
 if [ "${SEED_DEMO:-false}" = "true" ]; then

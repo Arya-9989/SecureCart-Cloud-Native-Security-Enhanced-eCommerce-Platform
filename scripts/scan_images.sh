@@ -24,7 +24,7 @@ cd "$root"
 mkdir -p "$report_dir"
 
 # Emulators used only for local runs and tests. Anything else compose runs is gated.
-emulators='^(axllent/mailpit|minio/minio|minio/mc|stripe/stripe-mock)[:@]'
+emulators='^(axllent/mailpit|cgr.dev/chainguard/minio|minio/minio|stripe/stripe-mock)[:@]'
 
 # `compose config` refuses to render without the required secrets; scanning needs none.
 images="$(DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY:-scan-only}" \

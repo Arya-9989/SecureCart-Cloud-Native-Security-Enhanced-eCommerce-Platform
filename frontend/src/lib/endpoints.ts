@@ -136,6 +136,11 @@ export const adminApi = {
     apiFetch<AdminProduct>("/admin/products/", { method: "POST", body }),
   updateProduct: (id: number, body: Partial<ProductInput>) =>
     apiFetch<AdminProduct>(`/admin/products/${id}/`, { method: "PATCH", body }),
+  uploadProductImage: (id: number, file: File) => {
+    const form = new FormData();
+    form.append("image", file);
+    return apiFetch<AdminProduct>(`/admin/products/${id}/image/`, { method: "POST", form });
+  },
   deleteProduct: (id: number) =>
     apiFetch<undefined>(`/admin/products/${id}/`, { method: "DELETE" }),
   categories: () => apiFetch<Category[]>("/admin/categories/"),

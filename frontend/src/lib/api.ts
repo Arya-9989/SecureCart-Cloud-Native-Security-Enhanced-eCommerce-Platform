@@ -127,6 +127,8 @@ export function refreshSession(): Promise<User | null> {
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
+  /** Multipart body (file uploads); the browser sets its own Content-Type boundary. */
+  form?: FormData;
   headers?: Record<string, string>;
   signal?: AbortSignal;
   /** Skip the refresh-and-retry dance (used by the auth endpoints themselves). */
@@ -155,7 +157,7 @@ function send(path: string, options: RequestOptions): Promise<Response> {
   return fetch(`${BASE}/api${path}`, {
     method: options.method ?? "GET",
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.form ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     credentials: "same-origin",
     signal: options.signal,
   });

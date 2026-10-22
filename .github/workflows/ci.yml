@@ -55,6 +55,8 @@ jobs:
       STRIPE_MOCK_URL: http://localhost:12111
       # Atomic rate limits and the catalog cache (tests/test_cache_and_throttling.py).
       REDIS_URL: redis://localhost:6379/0
+      # Image uploads against real S3 semantics (tests/test_media.py).
+      MINIO_URL: http://localhost:9000
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,6 +67,15 @@ jobs:
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
+      - name: Start MinIO (object storage for image-upload tests)
+        # Service containers cannot pass the "server /data" arguments, so it runs here.
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin             cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880             server /data --address :9000
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && exit 0
+            sleep 1
+          done
+          docker logs minio; exit 1
       - name: Install dependencies
         run: uv sync --frozen
       - name: Ruff lint (backend and repo scripts)
@@ -144,6 +155,12 @@ jobs:
       EMAIL_USE_TLS: "false"
       APP_BASE_URL: http://localhost:4173
       MAILPIT_URL: http://localhost:8025
+      # Product images go to MinIO, as in compose (e2e/admin-upload.spec.ts).
+      MEDIA_STORAGE: s3
+      MEDIA_S3_ENDPOINT: http://localhost:9000
+      MEDIA_S3_ACCESS_KEY: minioadmin
+      MEDIA_S3_SECRET_KEY: minioadmin
+      E2E_MEDIA: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,6 +176,15 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Start MinIO (product images)
+        # Service containers cannot pass the "server /data" arguments, so it runs here.
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin             cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880             server /data --address :9000
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && exit 0
+            sleep 1
+          done
+          docker logs minio; exit 1
       - name: Generate a throwaway secret key
         run: echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
       - name: Migrate and seed the demo store
@@ -166,6 +192,7 @@ jobs:
         run: |
           uv sync --frozen
           uv run python manage.py migrate --noinput
+          uv run python manage.py init_media_storage
           uv run python manage.py seed_demo
       - name: Start the API (gunicorn, DEBUG off, Secure refresh cookie)
         working-directory: backend
@@ -250,6 +277,7 @@ jobs:
           DJANGO_SECRET_KEY: build-only
           POSTGRES_PASSWORD: build-only
           REDIS_PASSWORD: build-only
+          MINIO_ROOT_PASSWORD: build-only
         run: docker compose build
       - name: Scan shipped images (fail on fixable HIGH/CRITICAL)
         run: scripts/scan_images.sh gate
@@ -278,6 +306,7 @@ jobs:
             echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)"
             echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
             echo "REDIS_PASSWORD=$(openssl rand -hex 24)"
+            echo "MINIO_ROOT_PASSWORD=$(openssl rand -hex 24)"
           } > .env
       - name: Build images
         run: docker compose build

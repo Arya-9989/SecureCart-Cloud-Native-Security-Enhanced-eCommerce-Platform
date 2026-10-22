@@ -14,6 +14,7 @@ from apps.catalog.views import (
     AdminProductViewSet,
     CategoryViewSet,
     ProductViewSet,
+    serve_media,
 )
 from apps.core.views import HealthView
 from apps.dashboard.views import DashboardView
@@ -36,6 +37,7 @@ admin.register("audit-logs", AuditLogViewSet, basename="admin-audit-log")
 
 api: list[URLPattern | URLResolver] = [
     path("health/", HealthView.as_view(), name="health"),
+    path("media/<path:key>", serve_media, name="media"),
     path("auth/", include("apps.accounts.urls")),
     path("cart/", CartView.as_view(), name="cart"),
     path("cart/items/", CartItemsView.as_view(), name="cart-items"),

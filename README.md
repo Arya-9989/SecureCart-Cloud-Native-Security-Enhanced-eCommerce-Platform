@@ -63,7 +63,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 
 **Admin console** (`/admin`, admin role only)
 - Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts, plus a Ctrl/⌘K command palette.
-- Product and inventory management: create, edit, hide/activate and delete (refused with `409` if the product has order history).
+- Product and inventory management: create, edit, hide/activate and delete (refused with `409` if the product has order history), with image uploads that are validated, stripped of metadata, re-encoded as WebP and kept in object storage.
 - Order monitoring and fulfilment: filter by status, search, and ship/deliver/cancel through the order state machine.
 - User and role management: promote or demote admins and suspend accounts (each change revokes that user's sessions).
 - Audit log of admin actions and authentication events, with actor, field-level diff, client IP and request ID.
@@ -81,6 +81,7 @@ flowchart LR
         db[("PostgreSQL 17")]
         redis[("Redis 8<br/>rate limits + catalog cache")]
         mail["Mailpit<br/>(local SMTP)"]
+        minio[("MinIO<br/>product images")]
     end
 
     payment["PaymentProvider<br/>(mock by default, or Stripe test mode)"]
@@ -90,6 +91,7 @@ flowchart LR
     api -- "ORM, row locks" --> db
     api -- "atomic limits, cache" --> redis
     api -- "SMTP" --> mail
+    api -- "S3 API" --> minio
     scheduler -- "job leases, settle orders" --> db
     api -- "charge / refund" --> payment
     payment -. "signed webhooks" .-> api
@@ -140,6 +142,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 | **Private pages and crawlers** | The bag, checkout, orders, admin and not-found pages carry `<meta name="robots" content="noindex">`. `robots.txt` only disallows `/api/`, because a crawler blocked from a page never sees its `noindex`. |
 | **Open redirects** | The `?next=` parameter after sign-in only accepts same-site relative paths. |
 | **Payments** | No card data reaches the backend: the client sends an opaque provider token. Checkout requires an `Idempotency-Key` header, so retries never double-charge or double-reserve, even when they race the first attempt: reservations are serialised per shopper and the key is re-checked under that lock. A retry gets the first attempt's answer, including its `402` if the card was declined. |
+| **File uploads** | Admin-only product image uploads accept only JPEG, PNG and WebP by magic bytes (client filenames and types are ignored, so SVG is out). Polyglots are refused: markup markers anywhere, or bytes after the image's own end. Images are capped at 5 MB and 40 megapixels, decoded fully, and re-encoded to WebP with no EXIF, GPS, ICC or text chunks. They are stored under random keys in a private bucket and served through the API with `nosniff`, a `default-src 'none'; sandbox` CSP and an explicit `image/webp` type ([ADR 0005](docs/adr/0005-product-image-uploads.md)). |
 | **Payment webhooks** | Stripe events are accepted only with a valid `Stripe-Signature` (HMAC-SHA256 over the raw body, any of several `v1` signatures during a secret rotation) and a timestamp under 5 minutes old. The event id is stored in the same transaction as its effect, so a replay or a concurrent redelivery changes nothing, and a failed effect is retried by Stripe. A PaymentIntent must name one of our Stripe orders, match the stored reference and carry exactly the order's amount and currency; live events are refused by a test-mode store. A charge whose outcome is unknown (a timeout) is never treated as a decline, and money that arrives for an order already cancelled is refunded ([ADR 0003](docs/adr/0003-stripe-payment-intents-and-webhooks.md)). |
 | **Audit trail** | Append-only `AuditLog` for admin create/update/delete, order transitions, role changes, logins, failed logins, password changes and refresh-token reuse, with actor, diff, client IP (proxy-aware) and request ID. |
 | **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`). |
@@ -233,6 +236,9 @@ All configuration comes from environment variables, and the defaults are the sec
 | `REDIS_URL` | *(empty)* | Redis for atomic rate limits and the catalog cache (compose: the `redis` service, password from `REDIS_PASSWORD`, which is required there) |
 | `DJANGO_CACHE_BACKEND` | `redis` with `REDIS_URL`, else `locmem` | `redis`, `db` or `locmem` |
 | `CATALOG_CACHE_SECONDS` | `300` | Longest a cached catalog response lives (writes invalidate it immediately) |
+| `MEDIA_STORAGE` | `disabled` (`s3` in compose) | `s3`, `memory` (tests) or `disabled` (uploads answer `503`) |
+| `MEDIA_S3_ENDPOINT` / `MEDIA_S3_BUCKET` / `MEDIA_S3_REGION` / `MEDIA_S3_ACCESS_KEY` / `MEDIA_S3_SECRET_KEY` | *(AWS)* / `securecart-media` / `us-east-1` / *(empty)* / *(empty)* | Object storage (compose: MinIO with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`, the latter required) |
+| `MAX_IMAGE_UPLOAD_BYTES` / `MAX_IMAGE_PIXELS` / `MAX_IMAGE_EDGE` | `5242880` / `40000000` / `2000` | Upload limits and the stored size |
 | `PENDING_ORDER_TIMEOUT_MINUTES` / `SCHEDULER_PENDING_ORDERS_EVERY_SECONDS` | `30` / `300` | When the scheduler settles unpaid orders, and how often it looks |
 | `THROTTLE_AUTH` / `THROTTLE_AUTH_REFRESH` / `THROTTLE_CHECKOUT` | `10/min` / `60/min` / `20/min` | Rate limits (credentials per IP, refresh per IP, checkout per user) |
 | `THROTTLE_ANON` / `THROTTLE_USER` | `120/min` / `600/min` | Global limits for everything else |
@@ -270,7 +276,8 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 | Checkout | `POST /api/checkout/` with an `Idempotency-Key` header: `201`, `200` (replay), `202` (Stripe: awaiting the webhook), `402` (declined), `403` (address not confirmed), `409` (stock or empty cart) | Customer |
 | Payments | `GET /api/payments/config/` (provider, mode, test methods) · `POST /api/payments/webhooks/stripe/` (Stripe-signed) | Public |
 | Orders | `GET /api/orders/` · `GET /api/orders/{id}/` · `POST /api/orders/{id}/cancel/` | Customer (own orders) |
-| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` and `POST /api/admin/orders/{id}/transition/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
+| Media | `GET /api/media/products/{id}/{key}.webp` (uploaded product images) | Public |
+| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD, `POST {id}/image/` multipart upload) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` and `POST /api/admin/orders/{id}/transition/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
 | System | `GET /api/health/` | Public |
 
 ## Testing
@@ -345,7 +352,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 
 ## Roadmap (future work, not implemented)
 
-- Product image uploads to object storage with server-side validation.
 - Invoice PDF generation.
 - Deployment manifests (Kubernetes or a managed container service) with TLS termination.
 
