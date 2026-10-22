@@ -4,6 +4,7 @@ import re
 from typing import Any, cast
 
 import django_filters
+from django.conf import settings
 from django.db.models import Count, Prefetch, QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
@@ -71,12 +72,20 @@ class CheckoutView(APIView):
                 description="Payment declined; stock released (also returned when replaying "
                 "a declined attempt's key)"
             ),
+            403: OpenApiResponse(description="Email address not confirmed yet"),
             409: OpenApiResponse(description="Insufficient stock or empty cart"),
         },
         tags=["orders"],
         summary="Place an order from the current cart",
     )
     def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        if settings.REQUIRE_VERIFIED_EMAIL and not user.email_verified:
+            return _error(
+                "email_unverified",
+                "Confirm your email address to place an order. We sent you a link.",
+                status.HTTP_403_FORBIDDEN,
+            )
         key = request.headers.get("Idempotency-Key", "")
         if not _IDEMPOTENCY_KEY_RE.match(key):
             raise ValidationError(
@@ -87,7 +96,7 @@ class CheckoutView(APIView):
         data = serializer.validated_data
         try:
             result = checkout.place_order(
-                cast(User, request.user),
+                user,
                 address=checkout.ShippingAddress(**data["shipping_address"]),
                 payment_token=data["payment_token"],
                 idempotency_key=key,

@@ -50,6 +50,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 - Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund).
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
 - Public pages (home, shop and each category, `/protection` and every product) are prerendered at build time and hydrated, so they read completely before, or without, any JavaScript.
+- Email confirmation and password reset by emailed one-time link. Checkout waits for a confirmed address; the bag and checkout say why and offer a fresh link.
 - A "How your order is protected" page (`/protection`), told as four moments that light up stage by stage as you scroll, and quiet trust cues at sign-in, bag, checkout and order confirmation. Every statement describes a mechanism in this codebase and links to it; the copy lives in one file (`frontend/src/lib/protection.ts`).
 
 **Design**: Apple Store calm on white and `#f5f5f7` with one deep-blue accent, Inter with optical sizing, designed light and dark themes, WCAG AA contrast throughout, and touch targets of at least 24px everywhere (WCAG 2.5.8) with 44px header controls and footer rows on phones. Product images are original SVG illustrations lit as one studio set, with one camera rule: standing products at eye level, desk objects from about 30° above.
@@ -114,13 +115,15 @@ Row locks are held only for the reservation transaction, never across the paymen
 |---|---|
 | **Passwords** | Argon2 hashing (PBKDF2 kept only to verify legacy hashes) and Django's validators: minimum length 10, common-password and all-numeric checks, similarity to email/name. |
 | **Session tokens** | Short-lived JWT access token (10 min) kept **in memory** by the SPA, never in `localStorage`. The refresh token (7 days) lives in an `httpOnly; Secure; SameSite=Strict` cookie scoped to `Path=/api/auth/`. |
+| **Revoking sessions** | Every token carries the account's session epoch, checked on each request and on refresh. Password reset, password change, role or status changes and refresh-token reuse bump it, so every session ends at once, including access tokens that have not expired yet. This also closes a race in which a refresh committing during a revocation could mint a token the blacklist sweep missed; a PostgreSQL test that races them fails without the epoch check ([ADR 0002](docs/adr/0002-email-verification-and-password-reset.md)). |
+| **Account recovery** | Reset and confirmation links carry a 256-bit secret, of which only the SHA-256 is stored. Each link works once (row-locked, so concurrent submissions cannot both succeed), expires (30 minutes for reset, 24 hours for confirmation), dies when a newer one is sent, and is bound to an active account and the address it was sent to. The secret travels in the URL fragment, which browsers never send to a server, and the page strips it from the address bar. A reset signs out every session and emails the owner a notice. |
 | **Refresh rotation and theft detection** | Every refresh rotates the token and blacklists the old one. Replaying an already-rotated token is treated as theft: **all** of that user's refresh tokens are revoked and the event is audited. Rotation locks the token's row, so requests racing with the same token cannot both succeed: one rotates, the others count as replays (a PostgreSQL test races six of them). |
 | **CSRF** | The cookie-authenticated endpoints (refresh, logout) also require an `X-CSRF-Protection: 1` header, which cross-site forms cannot send and cross-origin scripts cannot send without a CORS preflight that is denied. Everything else uses bearer tokens. |
 | **Authorization (RBAC)** | An `IsAdminRole` permission guards every admin endpoint. The role is read from the database on each request, not from token claims, so demotion or suspension takes effect immediately. Admins cannot demote or suspend themselves, and role/status changes revoke the target user's sessions. |
 | **Object-level access** | Orders and cart items are always queried through the requesting user, so another user's order returns `404` (no ID enumeration). Order URLs use UUIDs. |
 | **Input validation** | DRF serializers on every write; database `CHECK` constraints (`price > 0`, `stock >= 0`, `quantity >= 1`); strict formats for SKUs, postal codes, country codes and image URLs (site-relative or `https://` only, so no `javascript:` or protocol-relative URLs). JSON-only parsers and a 1 MiB body limit. |
-| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change (keyed by IP even for signed-in callers, so a stolen access token cannot brute-force the current password); 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; plus global anonymous/user limits. A database-backed cache keeps counters consistent across gunicorn workers. |
-| **User enumeration** | Unknown email, wrong password and inactive account all return the same message, and Django's auth backend equalises timing. |
+| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change (keyed by IP even for signed-in callers, so a stolen access token cannot brute-force the current password); 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; 5/min per IP on endpoints that send email, plus a silent per-inbox budget (3/hour, which unknown addresses spend too) so nobody can flood someone else's inbox; plus global anonymous/user limits. A database-backed cache keeps counters consistent across gunicorn workers. |
+| **User enumeration** | Sign-in answers the same for an unknown email, a wrong password and an inactive account, and Django's auth backend equalises timing. Forgot-password answers byte-for-byte the same for registered, unknown and suspended addresses, never sooner than 400 ms, and sends mail off the request path, so neither the answer nor the response time reveals an account. Registration still says an address is taken, because it signs the new account in immediately; it is limited to 10 attempts a minute per IP. |
 | **Headers** | nginx sends a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` and COOP. Django adds its own CSP for the API docs and `Cache-Control: no-store` on API responses. HSTS and SSL redirect are configurable for TLS deployments. |
 | **Error leakage** | Every API error, including unknown routes and unhandled exceptions, answers with the same JSON envelope and never includes exception details. |
 | **Private pages and crawlers** | The bag, checkout, orders, admin and not-found pages carry `<meta name="robots" content="noindex">`. `robots.txt` only disallows `/api/`, because a crawler blocked from a page never sees its `noindex`. |
@@ -150,7 +153,7 @@ cp .env.example .env    # then set DJANGO_SECRET_KEY and POSTGRES_PASSWORD
 docker compose up --build
 ```
 
-Open <http://localhost:8080> (change the port with `HTTP_PORT` in `.env`). On first start the backend runs migrations and seeds a demo store: 18 products, 6 customers and 30 days of order history created through the real checkout service.
+Open <http://localhost:8080> (change the port with `HTTP_PORT` in `.env`). Every email the app sends (confirmation and reset links) is caught by [Mailpit](https://mailpit.axllent.org) at <http://localhost:8025> (`MAILPIT_UI_PORT`). On first start the backend runs migrations and seeds a demo store: 18 products, 6 customers and 30 days of order history created through the real checkout service.
 
 | Demo account | Email | Password |
 |---|---|---|
@@ -208,6 +211,16 @@ All configuration comes from environment variables, and the defaults are the sec
 | `RUN_MIGRATIONS` / `SEED_DEMO` | `true` / `false` (`true` in compose) | Container start-up tasks |
 | `DEMO_ADMIN_PASSWORD` / `DEMO_CUSTOMER_PASSWORD` | see the demo table | Passwords used by `seed_demo` |
 | `VITE_DEMO_MODE` | `true` | Build-time flag for the demo-account shortcuts |
+| `EMAIL_BACKEND` | `smtp` (`console` only with `DJANGO_DEBUG=true`) | `smtp`, `console` or `locmem`; `console` prints links to the log, so it is refused outside debug |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | `localhost` / `587` / *(empty)* / *(empty)* | SMTP relay (compose: `mailpit` / `1025`) |
+| `EMAIL_USE_TLS` / `EMAIL_USE_SSL` / `EMAIL_TIMEOUT_SECONDS` | on for port 587 / on for port 465 / `10` | Transport security and timeout |
+| `DEFAULT_FROM_EMAIL` | `SecureCart <no-reply@securecart.dev>` | Sender address |
+| `APP_BASE_URL` | `http://localhost:8080` | Public storefront origin used in emailed links |
+| `PASSWORD_RESET_TTL_MINUTES` / `EMAIL_VERIFICATION_TTL_HOURS` | `30` / `24` | Link lifetimes |
+| `REQUIRE_VERIFIED_EMAIL` | `true` | Checkout requires a confirmed address |
+| `THROTTLE_ACCOUNT_EMAIL` / `THROTTLE_ACCOUNT_EMAIL_RECIPIENT` | `5/min` / `3/hour` | Mail-sending limits per IP and per inbox |
+| `ACCOUNT_RECOVERY_MIN_RESPONSE_MS` | `400` | Minimum forgot-password response time |
+| `EMAIL_DELIVERY` / `EMAIL_SEND_ATTEMPTS` / `EMAIL_RETRY_BACKOFF_SECONDS` | `background` / `3` / `2` | Send after commit on a worker thread, with retries |
 
 ## API overview
 
@@ -216,6 +229,7 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 | Area | Endpoints | Access |
 |---|---|---|
 | Auth | `POST /api/auth/register/`, `login/`, `refresh/`, `logout/` · `GET/PATCH /api/auth/me/` · `POST /api/auth/password/` | Public / authenticated |
+| Recovery | `POST /api/auth/password/forgot/` (always `202`) · `POST /api/auth/password/reset/` · `POST /api/auth/email/verify/` · `POST /api/auth/email/resend/` (authenticated) | Public / authenticated |
 | Catalog | `GET /api/products/` (`search`, `category`, `min_price`, `max_price`, `in_stock`, `featured`, `ordering`, `page`) · `GET /api/products/{slug}/` · `GET /api/categories/` | Public |
 | Cart | `GET/DELETE /api/cart/` · `POST /api/cart/items/` · `PATCH/DELETE /api/cart/items/{id}/` | Customer (own cart) |
 | Checkout | `POST /api/checkout/` with an `Idempotency-Key` header: `201`, `200` (replay), `402` (declined), `409` (stock or empty cart) | Customer |
@@ -296,7 +310,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 ## Roadmap (future work, not implemented)
 
 - A real payment provider (Stripe or Razorpay in test mode) implementing the existing `PaymentProvider` interface, with webhook-driven status updates.
-- Email verification and password reset.
 - Product image uploads to object storage with server-side validation.
 - Invoice PDF generation.
 - Redis for caching and throttling, plus a scheduler for `expire_pending_orders`.

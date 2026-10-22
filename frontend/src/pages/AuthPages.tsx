@@ -8,6 +8,7 @@ import { useAuth } from "@/auth/useAuth";
 import { Logo, LogoMark } from "@/components/layout/Logo";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
 import { ApiError, errorMessage } from "@/lib/api";
 import { protection } from "@/lib/protection";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
@@ -21,7 +22,7 @@ const DEMO_ACCOUNTS = [
   { label: "Admin", email: "admin@securecart.dev", password: "SecureCart!Admin1" },
 ];
 
-function AuthShell({
+export function AuthShell({
   title,
   subtitle,
   children,
@@ -154,6 +155,14 @@ export function LoginPage() {
         <Button type="submit" size="lg" className="w-full" loading={formState.isSubmitting}>
           Sign in
         </Button>
+        <p className="text-center">
+          <Link
+            to="/forgot-password"
+            className="link inline-flex min-h-11 items-center text-[15px]"
+          >
+            Forgot your password?
+          </Link>
+        </p>
       </form>
       {DEMO_MODE && (
         <div className="mt-8 rounded-[18px] border border-line p-5">
@@ -194,6 +203,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
   const { status, register: createAccount } = useAuth();
+  const toast = useToast();
   const [params] = useSearchParams();
   const next = safeNext(params.get("next"));
   const [formError, setFormError] = useState<string | null>(null);
@@ -208,6 +218,7 @@ export function RegisterPage() {
     setFormError(null);
     try {
       await createAccount({ full_name, email, password });
+      toast.success("Check your inbox.", `We sent a link to ${email} to confirm your address.`);
     } catch (error) {
       if (error instanceof ApiError && error.fields) {
         let mapped = false;

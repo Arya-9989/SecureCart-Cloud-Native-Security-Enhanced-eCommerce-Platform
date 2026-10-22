@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { mayHaveSession, onSessionChange, refreshSession, setSession } from "@/lib/api";
+import { hasSession, mayHaveSession, onSessionChange, refreshSession, setSession } from "@/lib/api";
 import { authApi } from "@/lib/endpoints";
 import type { User } from "@/lib/types";
 
@@ -68,9 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [apply, queryClient]);
 
+  const reloadUser = useCallback(async () => {
+    if (!hasSession()) return;
+    apply(await authApi.me());
+  }, [apply]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, isAdmin: user?.role === "admin", login, register, logout }),
-    [status, user, login, register, logout],
+    () => ({ status, user, isAdmin: user?.role === "admin", login, register, logout, reloadUser }),
+    [status, user, login, register, logout, reloadUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

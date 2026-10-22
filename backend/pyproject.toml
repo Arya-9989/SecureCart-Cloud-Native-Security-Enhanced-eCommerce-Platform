@@ -82,6 +82,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "postgres: requires PostgreSQL (row-level locking); skipped on SQLite",
+    "mailpit: delivers through a real SMTP server; needs MAILPIT_URL",
 ]
 filterwarnings = ["error::RuntimeWarning"]
 

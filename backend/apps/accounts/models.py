@@ -44,6 +44,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    # Every token carries the epoch it was issued in; bumping it ends every session at once,
+    # including access tokens that have not expired yet (see apps.accounts.authentication).
+    session_epoch = models.PositiveIntegerField(default=0)
 
     objects: ClassVar[UserManager] = UserManager()
 
@@ -61,3 +65,35 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_admin(self) -> bool:
         return self.role == Role.ADMIN
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None
+
+
+class TokenPurpose(models.TextChoices):
+    VERIFY_EMAIL = "verify_email", "Verify email"
+    RESET_PASSWORD = "reset_password", "Reset password"
+
+
+class OneTimeToken(models.Model):
+    """A single-use secret sent by email (verification or password reset).
+
+    Only the SHA-256 of the secret is stored, so a database leak yields nothing usable: the
+    secret itself has 256 bits of entropy and exists only in the email. ``email`` snapshots
+    the address the link was sent to, so a link cannot outlive an address change.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="one_time_tokens")
+    purpose = models.CharField(max_length=20, choices=TokenPurpose.choices)
+    token_hash = models.CharField(max_length=64, unique=True)
+    email = models.EmailField(max_length=254)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "purpose"]), models.Index(fields=["expires_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.purpose} for {self.email}"

@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Role, User
@@ -39,6 +40,9 @@ def api() -> APIClient:
 @pytest.fixture
 def make_user(db: Any) -> Callable[..., User]:
     def _make(email: str | None = None, role: str = Role.CUSTOMER, **extra: Any) -> User:
+        # Confirmed by default, like any shopper who has checked out before; tests of the
+        # verification flow pass email_verified_at=None.
+        extra.setdefault("email_verified_at", timezone.now())
         return User.objects.create_user(
             email=email or f"user-{uuid.uuid4().hex[:8]}@example.com",
             password=PASSWORD,

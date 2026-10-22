@@ -9,11 +9,13 @@ from decimal import Decimal
 from unittest import mock
 
 import pytest
+from django.conf import settings
 from django.db import OperationalError, connection, connections, transaction
+from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
-from apps.accounts import tokens
-from apps.accounts.models import User
+from apps.accounts import onetime, tokens
+from apps.accounts.models import TokenPurpose, User
 from apps.cart.models import Cart, CartItem
 from apps.catalog.models import Category, Product
 from apps.orders import checkout, state
@@ -207,3 +209,55 @@ def test_refund_is_requested_without_holding_stock_locks() -> None:
     assert probe == {"product_locked": False}
     product.refresh_from_db()
     assert product.stock == 5
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_parallel_resets_with_one_link_succeed_exactly_once() -> None:
+    """Two tabs (or an attacker racing the owner) submitting one reset link: one wins."""
+    if connection.vendor != "postgresql":
+        pytest.skip("row locks need PostgreSQL")
+    user = User.objects.create_user("reset-race@example.com", "x" * 12, full_name="R")
+    raw = onetime.issue(user, TokenPurpose.RESET_PASSWORD)
+    passwords = iter(f"Racer-{n}-Strong-Pass" for n in range(6))
+
+    def submit() -> int:
+        response = APIClient().post(
+            "/api/auth/password/reset/", {"token": raw, "new_password": next(passwords)}
+        )
+        return int(response.status_code)
+
+    outcomes = _race(6, submit)
+    assert sorted(str(o) for o in outcomes) == ["200"] + ["400"] * 5, outcomes
+
+
+def _rotate_and_revoke(user: User) -> list[tokens.TokenPair]:
+    """Run one rotation and one full revocation at the same instant; return minted pairs."""
+    raw = tokens.issue_tokens(User.objects.get(pk=user.pk)).refresh
+    minted: list[tokens.TokenPair] = []
+
+    def rotate() -> None:
+        minted.append(tokens.rotate(raw)[1])
+
+    def revoke() -> None:
+        tokens.revoke_all(User.objects.get(pk=user.pk))
+
+    jobs = iter([rotate, revoke])
+    _race(2, lambda: next(jobs)())  # noqa: PLW0108 - each thread takes the next job
+    return minted
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_refresh_racing_a_revocation_never_leaves_a_live_session() -> None:
+    """revoke_all (a password reset) and a refresh rotation interleave: nothing may survive."""
+    if connection.vendor != "postgresql":
+        pytest.skip("needs real concurrent transactions")
+    user = User.objects.create_user("revoke-race@example.com", "x" * 12, full_name="R")
+    for _ in range(8):
+        for pair in _rotate_and_revoke(user):
+            client = APIClient()
+            client.cookies[settings.REFRESH_COOKIE["NAME"]] = pair.refresh
+            assert client.post("/api/auth/refresh/", HTTP_X_CSRF_PROTECTION="1").status_code == 401
+            client.credentials(HTTP_AUTHORIZATION=f"Bearer {pair.access}")
+            assert client.get("/api/auth/me/").status_code == 401

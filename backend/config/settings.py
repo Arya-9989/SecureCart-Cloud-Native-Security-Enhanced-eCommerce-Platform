@@ -124,7 +124,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # --------------------------------------------------------------------------------------
 REST_FRAMEWORK: dict[str, Any] = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.accounts.authentication.SessionJWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
@@ -143,6 +143,10 @@ REST_FRAMEWORK: dict[str, Any] = {
         "auth": env_str("THROTTLE_AUTH", "10/min"),
         "auth_refresh": env_str("THROTTLE_AUTH_REFRESH", "60/min"),
         "checkout": env_str("THROTTLE_CHECKOUT", "20/min"),
+        # Mail-sending endpoints: per client IP, plus a silent per-recipient budget so nobody
+        # can flood someone else's inbox (see apps.accounts.throttles).
+        "account_email": env_str("THROTTLE_ACCOUNT_EMAIL", "5/min"),
+        "account_email_recipient": env_str("THROTTLE_ACCOUNT_EMAIL_RECIPIENT", "3/hour"),
     },
     "NUM_PROXIES": env_int("NUM_PROXIES", 0),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
@@ -189,6 +193,48 @@ REFRESH_COOKIE: dict[str, Any] = {
     "SAMESITE": "Strict",
     "HTTPONLY": True,
 }
+
+# --------------------------------------------------------------------------------------
+# Email (verification and password reset)
+# --------------------------------------------------------------------------------------
+# SMTP by default. Compose points it at Mailpit, which catches every message locally.
+# "console" prints messages (and therefore their one-time links) to the log: development only.
+_email_backends = {
+    "smtp": "django.core.mail.backends.smtp.EmailBackend",
+    "console": "django.core.mail.backends.console.EmailBackend",
+    "locmem": "django.core.mail.backends.locmem.EmailBackend",
+}
+_email_backend = env_str("EMAIL_BACKEND", "console" if DEBUG else "smtp")
+if _email_backend not in _email_backends:
+    raise ImproperlyConfigured(f"EMAIL_BACKEND must be one of {sorted(_email_backends)}.")
+if _email_backend == "console" and not DEBUG:
+    raise ImproperlyConfigured("EMAIL_BACKEND=console would log reset links; use it with DEBUG.")
+EMAIL_BACKEND = _email_backends[_email_backend]
+EMAIL_HOST = env_str("EMAIL_HOST", "localhost")
+EMAIL_PORT = env_int("EMAIL_PORT", 587)
+EMAIL_HOST_USER = env_str("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env_str("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=EMAIL_PORT == 587)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", default=EMAIL_PORT == 465)
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ImproperlyConfigured("Set at most one of EMAIL_USE_TLS and EMAIL_USE_SSL.")
+EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT_SECONDS", 10)
+DEFAULT_FROM_EMAIL = env_str("DEFAULT_FROM_EMAIL", "SecureCart <no-reply@securecart.dev>")
+#: "background" sends after commit on a worker thread; "inline" sends after commit in-request.
+EMAIL_DELIVERY = env_str("EMAIL_DELIVERY", "background")
+if EMAIL_DELIVERY not in {"background", "inline"}:
+    raise ImproperlyConfigured("EMAIL_DELIVERY must be 'background' or 'inline'.")
+EMAIL_SEND_ATTEMPTS = env_int("EMAIL_SEND_ATTEMPTS", 3)
+EMAIL_RETRY_BACKOFF_SECONDS = env_int("EMAIL_RETRY_BACKOFF_SECONDS", 2)
+#: Public origin of the storefront, used to build the links in emails.
+APP_BASE_URL = env_str("APP_BASE_URL", "http://localhost:8080")
+EMAIL_VERIFICATION_TTL_HOURS = env_int("EMAIL_VERIFICATION_TTL_HOURS", 24)
+PASSWORD_RESET_TTL_MINUTES = env_int("PASSWORD_RESET_TTL_MINUTES", 30)
+#: Checkout requires a confirmed address, so orders are tied to a reachable inbox.
+REQUIRE_VERIFIED_EMAIL = env_bool("REQUIRE_VERIFIED_EMAIL", default=True)
+#: Account-recovery responses never return sooner than this, whether or not the account
+#: exists, so response time cannot reveal which addresses are registered.
+ACCOUNT_RECOVERY_MIN_RESPONSE_MS = env_int("ACCOUNT_RECOVERY_MIN_RESPONSE_MS", 400)
 
 # --------------------------------------------------------------------------------------
 # Security headers

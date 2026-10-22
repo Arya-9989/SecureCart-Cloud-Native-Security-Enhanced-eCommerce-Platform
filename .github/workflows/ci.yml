@@ -32,8 +32,14 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.31.6
+        ports: ["1025:1025", "8025:8025"]
     env:
       DATABASE_URL: postgres://securecart:securecart@localhost:5432/securecart
+      # Real SMTP delivery tests (tests/test_mailpit.py) run against this Mailpit.
+      MAILPIT_URL: http://localhost:8025
+      MAILPIT_SMTP_PORT: "1025"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,12 +113,22 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.31.6
+        ports: ["1025:1025", "8025:8025"]
     env:
       DATABASE_URL: postgres://securecart:securecart@localhost:5432/securecart
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
       # The specs sign in many times within a minute; production keeps 10/min.
       THROTTLE_AUTH: 120/min
       THROTTLE_CHECKOUT: 120/min
+      # Account emails go to Mailpit, whose API the account-recovery spec reads.
+      EMAIL_BACKEND: smtp
+      EMAIL_HOST: localhost
+      EMAIL_PORT: "1025"
+      EMAIL_USE_TLS: "false"
+      APP_BASE_URL: http://localhost:4173
+      MAILPIT_URL: http://localhost:8025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -259,6 +275,13 @@ jobs:
           curl -fsSI http://localhost:8080/ | grep -qi "content-security-policy"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/admin/dashboard/)" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/products/halo-table-lamp)" = "200"
+          # Account email leaves the API over SMTP and lands in Mailpit.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json'             -d '{"email":"maya@example.com"}' http://localhost:8080/api/auth/password/forgot/)" = "202"
+          for _ in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:8025/api/v1/messages | grep -q "Reset your SecureCart password" && exit 0
+            sleep 1
+          done
+          echo "reset email never reached Mailpit"; exit 1
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color

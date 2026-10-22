@@ -19,6 +19,15 @@ const LoginPage = lazy(() => import("@/pages/AuthPages").then((m) => ({ default:
 const RegisterPage = lazy(() =>
   import("@/pages/AuthPages").then((m) => ({ default: m.RegisterPage })),
 );
+const ForgotPasswordPage = lazy(() =>
+  import("@/pages/AccountPages").then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import("@/pages/AccountPages").then((m) => ({ default: m.ResetPasswordPage })),
+);
+const VerifyEmailPage = lazy(() =>
+  import("@/pages/AccountPages").then((m) => ({ default: m.VerifyEmailPage })),
+);
 const CheckoutPage = lazy(() =>
   import("@/pages/CheckoutPage").then((m) => ({ default: m.CheckoutPage })),
 );
@@ -75,6 +84,9 @@ export const routes: RouteObject[] = [
       },
       { path: "login", element: lazyPage(<LoginPage />) },
       { path: "register", element: lazyPage(<RegisterPage />) },
+      { path: "forgot-password", element: lazyPage(<ForgotPasswordPage />) },
+      { path: "reset-password", element: lazyPage(<ResetPasswordPage />) },
+      { path: "verify-email", element: lazyPage(<VerifyEmailPage />) },
       {
         path: "admin",
         element: <RequireAdmin>{lazyPage(<AdminLayout />)}</RequireAdmin>,

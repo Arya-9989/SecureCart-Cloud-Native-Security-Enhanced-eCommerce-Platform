@@ -9,6 +9,7 @@ import type { z } from "zod";
 
 import { useAuth } from "@/auth/useAuth";
 import { PriceSummary } from "@/components/store/PriceSummary";
+import { VerifyEmailNotice } from "@/components/store/VerifyEmailNotice";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { SelectField, TextField } from "@/components/ui/Field";
@@ -42,7 +43,7 @@ type CheckoutForm = z.infer<typeof checkoutSchema>;
  * which is true because the retry reuses this attempt's idempotency key.
  */
 interface Problem {
-  kind: "declined" | "conflict" | "unknown";
+  kind: "declined" | "conflict" | "unknown" | "unverified";
   message: string;
   items?: StockProblem[];
 }
@@ -99,7 +100,7 @@ function TrustNote({ icon: Icon, children }: { icon: typeof Lock; children: Reac
 }
 
 export function CheckoutPage() {
-  const { user } = useAuth();
+  const { user, reloadUser } = useAuth();
   const { data: cart, isLoading, error, refetch } = useCart();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -132,7 +133,11 @@ export function CheckoutPage() {
       void navigate(`/orders/${order.id}?placed=1`, { replace: true });
     },
     onError: (err) => {
-      if (err instanceof ApiError && [402, 409].includes(err.status)) {
+      if (err instanceof ApiError && err.code === "email_unverified") {
+        // Refused before anything was reserved; the same key is safe to reuse later.
+        setProblem({ kind: "unverified", message: err.message });
+        void reloadUser();
+      } else if (err instanceof ApiError && [402, 409].includes(err.status)) {
         // The server reached a final decision for this key; the next attempt needs a new one.
         idempotencyKey.current = newIdempotencyKey();
         const items = (err.body as { error?: { items?: StockProblem[] } }).error?.items;
@@ -208,7 +213,12 @@ export function CheckoutPage() {
         className="mt-12 grid items-start gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-16"
       >
         <div className="min-w-0">
-          {problem && (
+          {user && !user.email_verified && (
+            <div className="mb-10">
+              <VerifyEmailNotice email={user.email} />
+            </div>
+          )}
+          {problem && problem.kind !== "unverified" && (
             <div
               role="alert"
               className="mb-10 flex gap-3 rounded-[18px] bg-danger-soft p-5 text-[15px]"

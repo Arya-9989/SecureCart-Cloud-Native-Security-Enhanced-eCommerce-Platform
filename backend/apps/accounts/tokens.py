@@ -8,6 +8,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from rest_framework_simplejwt.exceptions import TokenBackendError, TokenError
 from rest_framework_simplejwt.state import token_backend
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -36,9 +37,20 @@ class RefreshRejected(Exception):
         self.reuse_detected_for = reuse_detected_for
 
 
+#: Claim holding the session epoch a token was issued in (copied into access tokens).
+EPOCH_CLAIM = "sev"
+
+
 def issue_tokens(user: User) -> TokenPair:
     refresh = RefreshToken.for_user(user)
+    refresh[EPOCH_CLAIM] = user.session_epoch
     return TokenPair(access=str(refresh.access_token), refresh=str(refresh))
+
+
+def token_epoch(payload: Any) -> int:
+    """Epoch a token was issued in. Tokens minted before epochs existed count as epoch 0."""
+    value = payload.get(EPOCH_CLAIM, 0)
+    return value if isinstance(value, int) else -1
 
 
 def rotate(raw_refresh: str) -> tuple[User, TokenPair]:
@@ -69,13 +81,19 @@ def rotate(raw_refresh: str) -> tuple[User, TokenPair]:
         first_use = not BlacklistedToken.objects.filter(token__jti=jti).exists()
         old.blacklist()
         user = User.objects.filter(pk=user_id, is_active=True).first() if user_id else None
-        if user is not None:
+        revoked = user is not None and token_epoch(old.payload) != user.session_epoch
+        if user is not None and not revoked:
             if first_use:
                 pair = issue_tokens(user)
             else:
                 revoke_all(user)
     if user is None:
         raise RefreshRejected("User is inactive or no longer exists.")
+    if revoked:
+        # Every session was ended (password reset, role change, theft) after this token was
+        # issued. This also closes the race where a rotation commits a fresh token while a
+        # revocation is in progress: that token carries the old epoch and dies here.
+        raise RefreshRejected("Session was revoked.")
     if pair is None:
         raise RefreshRejected("Token was already rotated.", reuse_detected_for=user)
     return user, pair
@@ -87,7 +105,16 @@ def revoke(raw_refresh: str) -> None:
 
 
 def revoke_all(user: User) -> int:
-    """Blacklist every outstanding refresh token for ``user``. Returns the number revoked."""
+    """End every session of ``user``: refresh tokens *and* unexpired access tokens.
+
+    Bumping the session epoch invalidates every token issued so far (access tokens are
+    checked against it on each request); blacklisting the refresh tokens keeps the explicit
+    record. The epoch moves first, so a refresh racing this call cannot mint a token that
+    outlives it. ``user`` is updated in place, so tokens issued afterwards are valid.
+    Returns the number of refresh tokens blacklisted.
+    """
+    User.objects.filter(pk=user.pk).update(session_epoch=F("session_epoch") + 1)
+    user.refresh_from_db(fields=["session_epoch"])
     pending = OutstandingToken.objects.filter(user=user).exclude(
         id__in=BlacklistedToken.objects.filter(token__user=user).values("token_id")
     )

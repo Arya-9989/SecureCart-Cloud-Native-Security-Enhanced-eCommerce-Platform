@@ -121,9 +121,17 @@ class Command(BaseCommand):
     def _user(self, email: str, name: str, role: str, password: str) -> User:
         user = User.objects.filter(email=email).first()
         if user is None:
+            # Demo accounts are pre-confirmed so the store can be explored without an inbox.
             user = User.objects.create_user(
-                email=email, password=password, full_name=name, role=role
+                email=email,
+                password=password,
+                full_name=name,
+                role=role,
+                email_verified_at=timezone.now(),
             )
+        elif user.email_verified_at is None:
+            user.email_verified_at = timezone.now()
+            user.save(update_fields=["email_verified_at"])
         return user
 
     def _orders(

@@ -8,6 +8,7 @@ export const customer: User = {
   email: "maya@example.com",
   full_name: "Maya Patel",
   role: "customer",
+  email_verified: true,
   date_joined: "2026-01-01T00:00:00Z",
 };
 

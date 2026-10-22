@@ -42,6 +42,25 @@ export const authApi = {
   logout: () =>
     apiFetch<undefined>("/auth/logout/", { method: "POST", headers: CSRF, noRetry: true }),
   me: () => apiFetch<User>("/auth/me/"),
+  forgotPassword: (email: string) =>
+    apiFetch<{ detail: string }>("/auth/password/forgot/", {
+      method: "POST",
+      body: { email },
+      noRetry: true,
+    }),
+  resetPassword: (token: string, newPassword: string) =>
+    apiFetch<{ detail: string }>("/auth/password/reset/", {
+      method: "POST",
+      body: { token, new_password: newPassword },
+      noRetry: true,
+    }),
+  verifyEmail: (token: string) =>
+    apiFetch<{ detail: string }>("/auth/email/verify/", {
+      method: "POST",
+      body: { token },
+      noRetry: true,
+    }),
+  resendVerification: () => apiFetch<{ detail: string }>("/auth/email/resend/", { method: "POST" }),
 };
 
 export interface ProductQuery extends Query {

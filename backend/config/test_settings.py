@@ -20,5 +20,11 @@ REST_FRAMEWORK = {
         "auth": "10000/min",
         "auth_refresh": "10000/min",
         "checkout": "10000/min",
+        "account_email": "10000/min",
+        "account_email_recipient": "10000/min",
     },
 }
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+EMAIL_DELIVERY = "inline"
+EMAIL_RETRY_BACKOFF_SECONDS = 0
+ACCOUNT_RECOVERY_MIN_RESPONSE_MS = 0

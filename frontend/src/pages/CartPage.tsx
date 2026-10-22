@@ -1,7 +1,9 @@
 import { AlertCircle, Lock, ShoppingBag } from "lucide-react";
 import { Link } from "react-router";
 
+import { useAuth } from "@/auth/useAuth";
 import { PriceSummary } from "@/components/store/PriceSummary";
+import { VerifyEmailNotice } from "@/components/store/VerifyEmailNotice";
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, QuantityStepper, Skeleton } from "@/components/ui/misc";
@@ -79,6 +81,7 @@ function BagLine({ item }: { item: CartItem }) {
 
 export function CartPage() {
   const { data: cart, isLoading, error, refetch } = useCart();
+  const { user } = useAuth();
   useDocumentTitle("Bag");
 
   if (error) {
@@ -150,6 +153,12 @@ export function CartPage() {
         </p>
         <div className="mt-7 flex justify-center">{checkout}</div>
       </header>
+
+      {user && !user.email_verified && (
+        <div className="mt-12">
+          <VerifyEmailNotice email={user.email} />
+        </div>
+      )}
 
       <ul className="mt-14 divide-y divide-line border-y border-line" aria-label="Bag items">
         {cart.items.map((item) => (
