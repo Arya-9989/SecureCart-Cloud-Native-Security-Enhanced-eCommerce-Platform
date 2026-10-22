@@ -1,88 +1,284 @@
-# SecureCart – Cloud-Native Security-Enhanced eCommerce Platform
+# SecureCart
 
-SecureCart is a full-stack, cloud-native eCommerce platform developed to demonstrate **secure, scalable, and production-ready web application development**. The platform enables users to browse products, manage shopping carts, place orders, and view order history, while administrators can securely manage products, users, and orders through a **role-based administrative dashboard**.
+[![CI](https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab)
+![Django 5.2 LTS](https://img.shields.io/badge/django-5.2_LTS-0c4b33)
+![React 19](https://img.shields.io/badge/react-19-149eca)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-The project follows modern software engineering practices with a strong focus on **security, modular architecture, and cloud readiness**, making it suitable for real-world deployment scenarios.
+**A security-first e-commerce platform: a Django REST API and a React storefront with an admin console, built so that the hard parts (sessions, authorization, inventory under concurrency, payments) are handled correctly.**
 
----
+Customers browse a catalog, manage a server-side cart, check out and track orders. Administrators manage products, inventory, users and fulfilment from a dashboard, and every privileged action lands in an audit log. The whole stack runs in Docker behind nginx with one command.
 
-## 🚀 Features
+![Storefront home page](docs/screenshots/home.png)
 
-### 🔐 User Authentication & Authorization
-- Secure user registration and login
-- JWT-based authentication mechanism
-- Role-based access control (Admin / Customer)
+<table>
+  <tr>
+    <td><img src="docs/screenshots/admin-dashboard.png" alt="Admin dashboard with revenue chart"></td>
+    <td><img src="docs/screenshots/checkout.png" alt="Checkout page"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/order-confirmation.png" alt="Order confirmation with status tracker"></td>
+    <td><img src="docs/screenshots/admin-dashboard-dark.png" alt="Admin dashboard in dark mode"></td>
+  </tr>
+</table>
 
-### 🛍️ Product Management
-- Product listing with category support
-- Admin-only product creation, update, and deletion
-- Search and filtering functionality
+<p align="center">
+  <img src="docs/screenshots/mobile-home.png" width="230" alt="Mobile home page">
+  <img src="docs/screenshots/mobile-product.png" width="230" alt="Mobile product page">
+  <img src="docs/screenshots/mobile-admin.png" width="230" alt="Mobile admin dashboard">
+</p>
 
-### 🛒 Shopping Cart & Orders
-- Add and remove products from the cart
-- Secure checkout and order placement
-- Order history tracking for users
+More screenshots: [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [cart](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
 
-### 📊 Admin Dashboard
-- User and role management
-- Product and inventory management
-- Order monitoring and tracking
-
-### 🛡️ Security-Oriented Design
-- Password hashing and secure credential storage
-- Protected API endpoints
-- Input validation and sanitization
-- Secure token and session handling
-
----
-
-## 🛠️ Tech Stack
-
-### 🎨 Frontend
-- HTML5, CSS3
-- JavaScript
-- React.js
-- Responsive UI with dark-mode support
-
-### ⚙️ Backend
-- Python
-- Django
-- Django REST Framework (DRF)
-- RESTful API-based architecture
-
-### 🗄️ Database
-- PostgreSQL (production environment)
-- SQLite (development environment)
-
-### ☁️ DevOps & Cloud
-- Docker & Docker Compose
-- Git & GitHub for version control
-- CI/CD-ready architecture
-- Cloud deployment support (AWS / Azure / GCP)
-
-### 🔒 Security
-- JWT-based authentication
-- Role-based access control (RBAC)
-- CSRF and CORS configuration
-- OWASP Top 10 security considerations
+> All screenshots are captured from the Docker stack by [`scripts/screenshots.py`](scripts/screenshots.py), which drives the real UI against the seeded demo data. Product images are original SVGs drawn by [`scripts/generate_product_art.py`](scripts/generate_product_art.py).
 
 ---
 
-## 📌 Project Objective
+## Features
 
-The objective of SecureCart is to showcase **end-to-end full-stack development** with an emphasis on **web security, cloud-native architecture, and real-world eCommerce workflows**, making it an ideal portfolio and academic project.
+**Storefront**
+- Catalog with categories, search (name, description, SKU, category), price and availability filters, sorting and pagination, all reflected in the URL.
+- Product pages with stock indicators ("Only 3 left", "Sold out") and related products.
+- Server-side cart that follows the customer across devices, with per-line limits checked against live stock.
+- Checkout with address validation, a free-shipping threshold and tax, and a pluggable payment provider (an offline mock by default).
+- Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund).
+- Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
+
+**Admin console** (`/admin`, admin role only)
+- Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts.
+- Product and inventory management: create, edit, hide/activate and delete (refused with `409` if the product has order history).
+- Order monitoring and fulfilment: filter by status, search, and ship/deliver/cancel through the order state machine.
+- User and role management: promote or demote admins and suspend accounts (each change revokes that user's sessions).
+- Audit log of admin actions and authentication events, with actor, field-level diff, client IP and request ID.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    browser["Browser<br/>React SPA"]
+
+    subgraph compose["docker compose"]
+        nginx["nginx (unprivileged)<br/>static SPA + CSP headers<br/>reverse proxy /api"]
+        api["Django + DRF<br/>gunicorn"]
+        db[("PostgreSQL 17")]
+    end
+
+    payment["PaymentProvider<br/>(mock by default)"]
+
+    browser -- "single origin" --> nginx
+    nginx -- "/api/*, /static/*" --> api
+    api -- "ORM, row locks" --> db
+    api -- "charge / refund" --> payment
+```
+
+The browser only ever talks to one origin: nginx serves the SPA and proxies `/api` to Django, so the refresh cookie can be `SameSite=Strict` and CORS stays closed by default.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant API as Checkout service
+    participant DB as PostgreSQL
+    participant P as Payment provider
+
+    C->>API: POST /api/checkout/ (Idempotency-Key)
+    API->>DB: BEGIN; SELECT products FOR UPDATE (ordered by id)
+    API->>DB: verify stock, decrement, create order (pending_payment); COMMIT
+    API->>P: charge(total, token, idempotency key)
+    alt approved
+        API->>DB: order -> paid, consume cart
+        API-->>C: 201 Created
+    else declined
+        API->>DB: order -> payment_failed, release stock
+        API-->>C: 402 Payment Required
+    end
+```
+
+Row locks are held only for the reservation transaction, never across the payment call.
+
+## Security model
+
+| Concern | How it is handled |
+|---|---|
+| **Passwords** | Argon2 hashing (PBKDF2 kept only to verify legacy hashes) and Django's validators: minimum length 10, common-password and all-numeric checks, similarity to email/name. |
+| **Session tokens** | Short-lived JWT access token (10 min) kept **in memory** by the SPA, never in `localStorage`. The refresh token (7 days) lives in an `httpOnly; Secure; SameSite=Strict` cookie scoped to `Path=/api/auth/`. |
+| **Refresh rotation and theft detection** | Every refresh rotates the token and blacklists the old one. Replaying an already-rotated token is treated as theft: **all** of that user's refresh tokens are revoked and the event is audited. |
+| **CSRF** | The cookie-authenticated endpoints (refresh, logout) also require an `X-CSRF-Protection: 1` header, which cross-site forms cannot send and cross-origin scripts cannot send without a CORS preflight that is denied. Everything else uses bearer tokens. |
+| **Authorization (RBAC)** | An `IsAdminRole` permission guards every admin endpoint. The role is read from the database on each request, not from token claims, so demotion or suspension takes effect immediately. Admins cannot demote or suspend themselves, and role/status changes revoke the target user's sessions. |
+| **Object-level access** | Orders and cart items are always queried through the requesting user, so another user's order returns `404` (no ID enumeration). Order URLs use UUIDs. |
+| **Input validation** | DRF serializers on every write; database `CHECK` constraints (`price > 0`, `stock >= 0`, `quantity >= 1`); strict formats for SKUs, postal codes, country codes and image URLs (site-relative or `https://` only, so no `javascript:` or protocol-relative URLs). JSON-only parsers and a 1 MiB body limit. |
+| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change; 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; plus global anonymous/user limits. A database-backed cache keeps counters consistent across gunicorn workers. |
+| **User enumeration** | Unknown email, wrong password and inactive account all return the same message, and Django's auth backend equalises timing. |
+| **Headers** | nginx sends a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` and COOP. Django adds its own CSP for the API docs and `Cache-Control: no-store` on API responses. HSTS and SSL redirect are configurable for TLS deployments. |
+| **Open redirects** | The `?next=` parameter after sign-in only accepts same-site relative paths. |
+| **Payments** | No card data reaches the backend: the client sends an opaque provider token. Checkout requires an `Idempotency-Key` header, so retries never double-charge or double-reserve. |
+| **Audit trail** | Append-only `AuditLog` for admin create/update/delete, order transitions, role changes, logins, failed logins, password changes and refresh-token reuse, with actor, diff, client IP (proxy-aware) and request ID. |
+| **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`). |
+
+## Tech stack
+
+| Layer | Choices |
+|---|---|
+| Backend | Python 3.12, Django 5.2 LTS, Django REST Framework, SimpleJWT (rotation + blacklist), django-filter, drf-spectacular (OpenAPI 3), argon2-cffi, gunicorn, WhiteNoise |
+| Database | PostgreSQL 17 (SQLite for quick local runs; the concurrency test needs PostgreSQL) |
+| Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, TanStack Query, React Hook Form + Zod, Recharts, Lucide icons, self-hosted Inter |
+| Testing | pytest, pytest-django, coverage; Vitest, Testing Library, MSW |
+| Quality | Ruff (lint + format), mypy (strict, django-stubs), ESLint (typescript-eslint strict, jsx-a11y), Prettier |
+| Delivery | Multi-stage Dockerfiles, docker compose, nginx-unprivileged, GitHub Actions |
+
+## Quickstart
+
+### With Docker (recommended)
+
+```bash
+cp .env.example .env    # then set DJANGO_SECRET_KEY and POSTGRES_PASSWORD
+docker compose up --build
+```
+
+Open <http://localhost:8080> (change the port with `HTTP_PORT` in `.env`). On first start the backend runs migrations and seeds a demo store: 18 products, 6 customers and 30 days of order history created through the real checkout service.
+
+| Demo account | Email | Password |
+|---|---|---|
+| Admin | `admin@securecart.dev` | `SecureCart!Admin1` |
+| Customer | `maya@example.com` | `SecureCart!Demo1` |
+
+The sign-in page has one-click buttons for both (hide them with `VITE_DEMO_MODE=false`). At checkout, choose **Test card: approve** or **Test card: decline**. No real payment is processed.
+
+### Local development
+
+Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), and Node 22+.
+
+```bash
+# API on http://localhost:8000
+cd backend
+uv sync
+export DJANGO_DEBUG=true DATABASE_URL=sqlite:///db.sqlite3 REFRESH_COOKIE_SECURE=false
+uv run python manage.py migrate
+uv run python manage.py seed_demo
+uv run python manage.py runserver
+
+# SPA on http://localhost:5173 (proxies /api to :8000, so cookies behave as in production)
+cd frontend
+npm install
+npm run dev
+```
+
+Other commands: `uv run python manage.py expire_pending_orders --minutes 30` releases stock held by abandoned payments, and `python scripts/screenshots.py --base-url http://localhost:8080` regenerates the README screenshots.
+
+## Configuration
+
+All configuration comes from environment variables, and the defaults are the secure choice.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | *(required unless `DJANGO_DEBUG=true`)* | Django signing key |
+| `DJANGO_DEBUG` | `false` | Development mode |
+| `DATABASE_URL` | `sqlite:///backend/db.sqlite3` | `postgres://user:pass@host:5432/db` or `sqlite:///path` |
+| `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated host allow-list |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | *(empty)* | Origins trusted for CSRF checks |
+| `CORS_ALLOWED_ORIGINS` | *(empty)* | Only needed if the SPA is served from a different origin |
+| `JWT_SIGNING_KEY` | `DJANGO_SECRET_KEY` | Separate key so tokens can be rotated independently |
+| `JWT_ACCESS_MINUTES` / `JWT_REFRESH_DAYS` | `10` / `7` | Token lifetimes |
+| `REFRESH_COOKIE_SECURE` | `true` | `Secure` flag on the refresh cookie (`localhost` counts as secure) |
+| `DJANGO_CACHE_BACKEND` | `locmem` | `db` shares throttle state across workers (used in compose) |
+| `THROTTLE_AUTH` / `THROTTLE_AUTH_REFRESH` / `THROTTLE_CHECKOUT` | `10/min` / `60/min` / `20/min` | Rate limits |
+| `NUM_PROXIES` | `0` | Trusted proxy hops for client IPs (`1` behind nginx) |
+| `DJANGO_HSTS_SECONDS` / `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_BEHIND_TLS_PROXY` | `0` / `false` / `false` | TLS hardening for real deployments |
+| `PAYMENT_PROVIDER` | `apps.payments.providers.mock.MockPaymentProvider` | Dotted path to a `PaymentProvider` subclass |
+| `STORE_CURRENCY`, `FREE_SHIPPING_THRESHOLD`, `FLAT_SHIPPING_FEE`, `TAX_RATE`, `MAX_CART_LINE_QUANTITY` | `USD`, `75.00`, `6.99`, `0.08`, `10` | Store pricing rules |
+| `RUN_MIGRATIONS` / `SEED_DEMO` | `true` / `false` (`true` in compose) | Container start-up tasks |
+| `DEMO_ADMIN_PASSWORD` / `DEMO_CUSTOMER_PASSWORD` | see the demo table | Passwords used by `seed_demo` |
+| `VITE_DEMO_MODE` | `true` | Build-time flag for the demo-account shortcuts |
+
+## API overview
+
+Interactive documentation is served by the backend at **`/api/docs/`** (Swagger UI) and **`/api/redoc/`**, generated from the code by drf-spectacular; the raw schema is at `/api/schema/`. Every error uses one envelope: `{"error": {"code", "message", "fields"?}}`.
+
+| Area | Endpoints | Access |
+|---|---|---|
+| Auth | `POST /api/auth/register/`, `login/`, `refresh/`, `logout/` · `GET/PATCH /api/auth/me/` · `POST /api/auth/password/` | Public / authenticated |
+| Catalog | `GET /api/products/` (`search`, `category`, `min_price`, `max_price`, `in_stock`, `featured`, `ordering`, `page`) · `GET /api/products/{slug}/` · `GET /api/categories/` | Public |
+| Cart | `GET/DELETE /api/cart/` · `POST /api/cart/items/` · `PATCH/DELETE /api/cart/items/{id}/` | Customer (own cart) |
+| Checkout | `POST /api/checkout/` with an `Idempotency-Key` header: `201`, `200` (replay), `402` (declined), `409` (stock or empty cart) | Customer |
+| Orders | `GET /api/orders/` · `GET /api/orders/{id}/` · `POST /api/orders/{id}/cancel/` | Customer (own orders) |
+| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` and `POST /api/admin/orders/{id}/transition/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
+| System | `GET /api/health/` | Public |
+
+## Testing
+
+```bash
+cd backend && uv run pytest --cov     # 181 tests; set DATABASE_URL to run on PostgreSQL
+cd frontend && npm test               # 48 tests
+```
+
+**Backend** (97% line coverage): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling; a parametrized RBAC matrix proving anonymous users get `401` and customers `403` on every admin endpoint; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays, insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; and the dashboard maths.
+
+The key concurrency guarantee has its own test: **eight threads race to buy three units on PostgreSQL, and exactly three orders succeed while stock ends at zero.** It runs in CI against a PostgreSQL service container (and is skipped on SQLite).
+
+**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, cart, sign-in, registration, admin guard and checkout (including a fresh idempotency key after a decline).
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff, mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx.
+
+## Project structure
+
+```text
+.
+├── backend/
+│   ├── config/                 # env-driven settings, URLs, test settings
+│   ├── apps/
+│   │   ├── accounts/           # user model, JWT cookie flow, RBAC permission, admin user API
+│   │   ├── catalog/            # categories, products, public + admin viewsets, demo data
+│   │   ├── cart/               # server-side cart
+│   │   ├── orders/             # checkout service, state machine, pricing, order APIs
+│   │   ├── payments/           # PaymentProvider interface, mock provider, registry
+│   │   ├── audit/              # audit log model, service and admin API
+│   │   ├── dashboard/          # admin KPIs
+│   │   └── core/               # middleware, error envelope, health check, seed_demo
+│   ├── tests/                  # pytest suite
+│   └── Dockerfile, docker-entrypoint.sh, pyproject.toml, uv.lock
+├── frontend/
+│   ├── src/
+│   │   ├── auth/               # session context and route guards
+│   │   ├── components/         # UI primitives, layout, store and admin components
+│   │   ├── pages/              # storefront and admin pages (+ tests)
+│   │   ├── lib/                # API client, endpoints, types, validation, formatting
+│   │   └── test/               # MSW server, fixtures, render helpers
+│   ├── public/products/        # generated product artwork (SVG)
+│   ├── nginx/                  # server config and security headers
+│   └── Dockerfile, package.json, package-lock.json
+├── scripts/                    # product-art generator, screenshot capture
+├── docs/screenshots/
+├── docker-compose.yml
+└── .env.example
+```
+
+## Design decisions
+
+- **Refresh cookie plus in-memory access token, not tokens in `localStorage`.** Any script running on the page can read storage; nothing can read an `httpOnly` cookie. Keeping the short-lived access token in memory means a page reload costs one silent refresh, which the client deduplicates across concurrent requests.
+- **Pessimistic locking for stock.** `SELECT … FOR UPDATE` on the cart's products, taken in primary-key order to avoid deadlocks, makes overselling impossible without retry loops, and a `stock >= 0` check constraint is the backstop. A conditional `UPDATE … WHERE stock >= n` would also work, but locking keeps multi-line orders all-or-nothing and easy to reason about.
+- **Payment outside the transaction.** Holding row locks across a network call would serialise checkout on the slowest gateway response. Instead the order is reserved as `pending_payment`, charged, then finalised; declines release stock, and `expire_pending_orders` cleans up if a process dies between steps. The trade-off is a short window in which stock is reserved but not yet paid for.
+- **Explicit state machine.** Every status change goes through `orders.state.transition`, which locks the order, validates the move against one transition table, applies side effects (restock, refund, timestamps) and records an event. Customers and admins get different allowed subsets, and only checkout can set `paid` or `payment_failed`.
+- **Snapshots on order lines.** Name, SKU, image and unit price are copied at purchase time, so catalog edits never rewrite history. Products with history cannot be hard-deleted; they are hidden instead.
+- **Role checked against the database.** A role claim in the JWT would stay valid for the token's lifetime after a demotion. Reading `user.role` per request costs nothing extra, because authentication already loads the user.
+- **Refresh-token reuse revokes everything.** This follows OAuth refresh-rotation guidance. The cost is that two tabs refreshing at exactly the same instant can sign the user out; the client's single-flight refresh makes that rare.
+- **Django 5.2 LTS and ESLint 9.** Both are deliberate: 5.2 is the long-term-support line, and ESLint 9 is the newest major that `eslint-plugin-jsx-a11y` supports, so accessibility linting stays on.
+- **Migrations at container start.** Convenient for a single instance. With several replicas, set `RUN_MIGRATIONS=false` and run them as a release job.
+
+## Roadmap (future work, not implemented)
+
+- A real payment provider (Stripe or Razorpay in test mode) implementing the existing `PaymentProvider` interface, with webhook-driven status updates.
+- Email verification and password reset.
+- Product image uploads to object storage with server-side validation.
+- Invoice PDF generation.
+- Redis for caching and throttling, plus a scheduler for `expire_pending_orders`.
+- Playwright end-to-end tests in CI and container image scanning.
+- Deployment manifests (Kubernetes or a managed container service) with TLS termination.
+
+## License
+
+[MIT](LICENSE) © Arya Shrikant Mahindrakar
 
 ---
 
-## 🚧 Future Enhancements
-- Payment gateway integration (Stripe / Razorpay – test mode)
-- Email verification and password reset
-- Order invoice generation
-- Redis caching for performance optimization
-- Deployment automation using CI/CD pipelines
-
----
-
-## 👤 Author
-**Arya Shrikant Mahindrakar**  
-B.Tech – Cloud Technology & Information Security
+Built by **Arya Shrikant Mahindrakar**, B.Tech Cloud Technology & Information Security.
