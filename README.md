@@ -34,7 +34,7 @@ Customers browse a catalog, manage a server-side cart, check out and track order
   <img src="docs/screenshots/mobile-admin.png" width="230" alt="Mobile admin dashboard">
 </p>
 
-More screenshots: [how your order is protected](docs/screenshots/protection.png) · [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [bag](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
+More screenshots: [how your order is protected](docs/screenshots/protection.png) ([the four-moments story, scrolling](docs/screenshots/protection-story.gif)) · [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [bag](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
 
 > All screenshots are captured from the Docker stack by [`scripts/screenshots.py`](scripts/screenshots.py), which drives the real UI against the seeded demo data. Product images are original SVGs drawn by [`scripts/generate_product_art.py`](scripts/generate_product_art.py).
 
@@ -49,9 +49,12 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 - Checkout with address validation, a free-shipping threshold and tax, and a pluggable payment provider (an offline mock by default).
 - Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund).
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
-- A "How your order is protected" page (`/protection`) and quiet trust cues at sign-in, bag, checkout and order confirmation. Every statement describes a mechanism in this codebase and links to it; the copy lives in one file (`frontend/src/lib/protection.ts`).
+- Public pages (home, shop and each category, `/protection` and every product) are prerendered at build time and hydrated, so they read completely before, or without, any JavaScript.
+- A "How your order is protected" page (`/protection`), told as four moments that light up stage by stage as you scroll, and quiet trust cues at sign-in, bag, checkout and order confirmation. Every statement describes a mechanism in this codebase and links to it; the copy lives in one file (`frontend/src/lib/protection.ts`).
 
-**Design**: Apple Store calm on white and `#f5f5f7` with one deep-blue accent, Inter with optical sizing, designed light and dark themes, WCAG AA contrast throughout, reduced-motion support, and touch targets of at least 24px everywhere (WCAG 2.5.8) with 44px header controls and footer rows on phones. Product images are original SVG illustrations lit as one studio set, with one camera rule: standing products at eye level, desk objects from about 30° above.
+**Design**: Apple Store calm on white and `#f5f5f7` with one deep-blue accent, Inter with optical sizing, designed light and dark themes, WCAG AA contrast throughout, and touch targets of at least 24px everywhere (WCAG 2.5.8) with 44px header controls and footer rows on phones. Product images are original SVG illustrations lit as one studio set, with one camera rule: standing products at eye level, desk objects from about 30° above.
+
+**Motion**: quiet and purposeful, with no animation library. `/protection` pins a four-moments story (sign-in, bag, checkout, after you order) whose stages light up along a rail as you scroll, and the checkout chapter's four steps light up in order; the local nav's underline slides between sections; on the home page the lead product steps forward as the page scrolls; a product card morphs into its product page (View Transitions); adding to the bag changes the pressed button to "Added" and the nav's bag icon acknowledges it; the admin revenue line draws in and its bars grow. Scroll-linked motion uses CSS scroll-driven animations, with a small scripted fallback where they are missing. Only opacity and transform animate, nothing is hidden before script or CSS support is confirmed, and with reduced motion every element shows its final state.
 
 **Admin console** (`/admin`, admin role only)
 - Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts, plus a Ctrl/⌘K command palette.
@@ -67,7 +70,7 @@ flowchart LR
     browser["Browser<br/>React SPA"]
 
     subgraph compose["docker compose"]
-        nginx["nginx (unprivileged)<br/>static SPA + CSP headers<br/>reverse proxy /api"]
+        nginx["nginx (unprivileged)<br/>prerendered pages + SPA + CSP headers<br/>reverse proxy /api"]
         api["Django + DRF<br/>gunicorn"]
         db[("PostgreSQL 17")]
     end
@@ -80,7 +83,7 @@ flowchart LR
     api -- "charge / refund" --> payment
 ```
 
-The browser only ever talks to one origin: nginx serves the SPA and proxies `/api` to Django, so the refresh cookie can be `SameSite=Strict` and CORS stays closed by default.
+The browser only ever talks to one origin: nginx serves the SPA and proxies `/api` to Django, so the refresh cookie can be `SameSite=Strict` and CORS stays closed by default. The public pages are prerendered by `npm run build` (React's `react-dom/static`, `frontend/scripts/prerender.mjs`) from `frontend/prerender/catalog.json`, public catalog responses recorded from the seeded demo store, so the build needs no running API; nginx answers each of those URLs with its own HTML file, the app hydrates it and refetches live stock and prices at once. A backend test keeps the snapshot equal to `seed_demo`'s catalog; after changing the demo catalog, re-record it with `npm run prerender:capture -- http://localhost:8080`.
 
 ```mermaid
 sequenceDiagram
@@ -222,20 +225,20 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 ## Testing
 
 ```bash
-cd backend && uv run pytest --cov     # 247 tests; set DATABASE_URL to run on PostgreSQL
-cd frontend && npm test               # 64 tests
-cd frontend && npm run e2e            # 18 Playwright + axe specs (needs a running, seeded API)
+cd backend && uv run pytest --cov     # 249 tests; set DATABASE_URL to run on PostgreSQL
+cd frontend && npm test               # 83 tests
+cd frontend && npm run e2e            # 23 Playwright + axe specs (needs a running, seeded API)
 ```
 
 **Backend** (97% line coverage): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling, including password changes by a signed-in caller; an RBAC matrix built from the URL configuration itself, proving anonymous users get `401` and customers `403` on every admin route for every HTTP verb (55 cases), so a new admin endpoint is covered automatically; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays (a replayed decline repeats its `402`), insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; the JSON error envelope for unknown routes and unhandled errors (with no details leaked); the dashboard maths; and a contract test that keeps the rules the storefront quotes (`frontend/src/lib/storeRules.ts`) equal to the server's defaults.
 
 The concurrency guarantees have their own tests on PostgreSQL, with real threads: **eight shoppers race for three units and exactly three orders succeed while stock ends at zero; six retries with one idempotency key for the last unit all get the same single order; six refreshes with one token never mint more than one session; and a refund is requested without holding any product row lock.** They run in CI against a PostgreSQL service container (and are skipped on SQLite).
 
-**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, bag, sign-in, registration, admin guard, command palette and checkout (including a fresh idempotency key after a decline, the same key on a retry after a dropped connection, with no claim that nothing was charged, and inline validation), noindex on private and not-found pages, and the footer credit. The tests wait on real milestones (MSW responses, loaded modules) rather than polling deadlines, so they behave the same on a loaded CI machine.
+**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, bag, sign-in, registration, admin guard, command palette and checkout (including a fresh idempotency key after a decline, the same key on a retry after a dropped connection, with no claim that nothing was charged, and inline validation), noindex on private and not-found pages, and the footer credit. The prerender is tested end to end in Node: every page's HTML carries its content and no inline script, hydrating it produces no mismatch, and a product still showing build-time data is confirmed against the live API before it is added to the bag. The motion tests cover the story's static, reduced-motion and scripted states, the add-to-bag cue with and without motion, and the chart draw-in. The tests wait on real milestones (MSW responses, loaded modules) rather than polling deadlines, so they behave the same on a loaded CI machine.
 
-**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, a checkout completed with the keyboard alone, noindex and robots.txt, the phone footer's 44px disclosure rows, and the admin dashboard, palette and tables. Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
+**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, a checkout completed with the keyboard alone, noindex and robots.txt, the phone footer's 44px disclosure rows, and the admin dashboard, palette and tables; the public pages with JavaScript off, hydration in place, the four-moments story at points through its pinned range, the card-to-page morph, and reduced motion (every stage lit, no view transition). Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
 
-**Measured** (2026-10-22, the Docker stack behind nginx, every route in light and dark at 1440px and 390px): zero serious or critical axe violations, CLS at most 0.01, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 90 to 94. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 102 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
+**Measured** (2026-10-23, the Docker stack behind nginx, every audited route in light and dark at 1440px and 390px): no axe violations reported, CLS at most 0.0072, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 89 to 94 on the public routes and 90 to 93 on the signed-in ones; it moves by a point or two between runs on the same build (three repeat runs of a product page gave 90, 91 and 90). With JavaScript off, the measured public pages (home, shop, a category, `/protection` and a product page) show 100% of the words they show with it on; scrolling those pages drops no frames (0% of frames over 20 ms), and with reduced motion no text is left hidden. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 101 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
 
 **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
 
@@ -262,9 +265,12 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 │   │   ├── components/         # UI primitives, layout, store and admin components
 │   │   ├── pages/              # storefront and admin pages (+ tests)
 │   │   ├── lib/                # API client, endpoints, types, validation, formatting
+│   │   ├── prerender/          # which pages are prerendered, payload and hydration rules
 │   │   └── test/               # MSW server, fixtures, render helpers
 │   ├── public/products/        # generated product artwork (SVG)
 │   ├── e2e/                    # Playwright + axe end-to-end specs
+│   ├── prerender/catalog.json  # recorded catalog responses the build prerenders from
+│   ├── scripts/prerender.mjs   # build-time prerender (and snapshot capture)
 │   ├── nginx/                  # server config and security headers
 │   └── Dockerfile, package.json, package-lock.json
 ├── scripts/                    # product-art generator, screenshot capture
@@ -283,6 +289,7 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 - **Role checked against the database.** A role claim in the JWT would stay valid for the token's lifetime after a demotion. Reading `user.role` per request costs nothing extra, because authentication already loads the user.
 - **Refresh-token reuse revokes everything.** This follows OAuth refresh-rotation guidance. The cost is that two tabs refreshing at exactly the same instant can sign the user out; the client's single-flight refresh makes that rare.
 - **Django 5.2 LTS and ESLint 9.** Both are deliberate: 5.2 is the long-term-support line, and ESLint 9 is the newest major that `eslint-plugin-jsx-a11y` supports, so accessibility linting stays on.
+- **Prerendering from a recorded snapshot, not SSR.** The public pages only need the public catalog, so rendering them once per build keeps nginx static (no Node server in production) and lets the Docker image and CI build without a backend. The cost is that the HTML can lag the live catalog until the next build; the app refetches on load, and a product that has not been confirmed live yet is looked up before it goes into a bag. New products still work at once through the SPA shell.
 - **Migrations at container start.** Convenient for a single instance. With several replicas, set `RUN_MIGRATIONS=false` and run them as a release job.
 
 ## Roadmap (future work, not implemented)

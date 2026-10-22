@@ -57,8 +57,13 @@ def storefront(base: str, browser, dark: bool = False) -> None:  # type: ignore[
         return
     page.goto(f"{base}/shop?category=audio")
     shot(page, "shop")
+    # The four-moments story is a pinned, scroll-scrubbed stage; a full-page capture of it
+    # would show one stage over four screens of black. Reduced motion lays it out as the
+    # static overview (every stage lit, all four panels), which is what a still image needs.
+    page.emulate_media(reduced_motion="reduce")
     page.goto(f"{base}/protection")
     shot(page, "protection", full_page=True)
+    page.emulate_media(reduced_motion="no-preference")
     page.goto(f"{base}/products/aurora-wireless-headphones")
     shot(page, "product")
     page.goto(f"{base}/login")
