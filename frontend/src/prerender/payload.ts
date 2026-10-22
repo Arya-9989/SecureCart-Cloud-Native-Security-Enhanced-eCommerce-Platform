@@ -8,9 +8,9 @@ import type { DehydratedState } from "@tanstack/react-query";
 export const PAYLOAD_ID = "sc-prerender";
 
 export interface PrerenderPayload {
-  /** The path the HTML was rendered for. */
+  /** The path (plus, for exactSearch pages, the query string) the HTML was rendered for. */
   url: string;
-  /** True when the page also depends on the query string (it must then be empty). */
+  /** True when the page also depends on the query string, which must then match exactly. */
   exactSearch: boolean;
   state: DehydratedState;
 }
@@ -39,6 +39,9 @@ export function canHydrate(
   payload: PrerenderPayload,
   location: { pathname: string; search: string },
 ): boolean {
-  if (location.pathname !== payload.url) return false;
-  return !payload.exactSearch || location.search === "" || location.search === "?";
+  const [path = "", query = ""] = payload.url.split(/(?=\?)/);
+  if (location.pathname !== path) return false;
+  if (!payload.exactSearch) return true;
+  const search = location.search === "?" ? "" : location.search;
+  return search === query;
 }

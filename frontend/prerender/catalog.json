@@ -1,6 +1,6 @@
 {
   "note": "Public catalog responses recorded from the seeded demo store (seed_demo) by `npm run prerender:capture`. Used only to prerender the public pages; the browser refetches live data on load.",
-  "capturedAt": "2026-10-22T21:03:29.954Z",
+  "capturedAt": "2026-10-22T21:26:47.436Z",
   "responses": {
     "/categories/": [
       {
@@ -60,7 +60,7 @@
           "in_stock": true,
           "image_url": "/products/aurora-wireless-headphones.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.301326Z"
+          "created_at": "2026-10-22T21:23:42.559907Z"
         },
         {
           "id": 4,
@@ -78,7 +78,7 @@
           "in_stock": true,
           "image_url": "/products/groove-desk-turntable.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.305156Z"
+          "created_at": "2026-10-22T21:23:42.563893Z"
         },
         {
           "id": 3,
@@ -96,7 +96,7 @@
           "in_stock": true,
           "image_url": "/products/echo-studio-earbuds.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.304093Z"
+          "created_at": "2026-10-22T21:23:42.562724Z"
         },
         {
           "id": 2,
@@ -114,7 +114,86 @@
           "in_stock": true,
           "image_url": "/products/pulse-mini-speaker.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.302918Z"
+          "created_at": "2026-10-22T21:23:42.561632Z"
+        }
+      ]
+    },
+    "/products/?category=audio&page=1&page_size=12": {
+      "count": 4,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": 1,
+          "name": "Aurora Wireless Headphones",
+          "slug": "aurora-wireless-headphones",
+          "sku": "AUD-AURORA",
+          "description": "Over-ear headphones with adaptive noise cancellation, 40-hour battery life and memory-foam cushions wrapped in vegan leather.",
+          "category": {
+            "id": 1,
+            "name": "Audio",
+            "slug": "audio"
+          },
+          "price": "189.00",
+          "stock": 24,
+          "in_stock": true,
+          "image_url": "/products/aurora-wireless-headphones.svg",
+          "is_featured": true,
+          "created_at": "2026-10-22T21:23:42.559907Z"
+        },
+        {
+          "id": 4,
+          "name": "Groove Desk Turntable",
+          "slug": "groove-desk-turntable",
+          "sku": "AUD-GROOVE",
+          "description": "Belt-driven turntable with a walnut plinth, built-in preamp and Bluetooth output for modern speakers.",
+          "category": {
+            "id": 1,
+            "name": "Audio",
+            "slug": "audio"
+          },
+          "price": "249.00",
+          "stock": 8,
+          "in_stock": true,
+          "image_url": "/products/groove-desk-turntable.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.563893Z"
+        },
+        {
+          "id": 3,
+          "name": "Echo Studio Earbuds",
+          "slug": "echo-studio-earbuds",
+          "sku": "AUD-ECHO",
+          "description": "True wireless earbuds with a pocketable charging case, multipoint pairing and a transparency mode for city walks.",
+          "category": {
+            "id": 1,
+            "name": "Audio",
+            "slug": "audio"
+          },
+          "price": "129.00",
+          "stock": 3,
+          "in_stock": true,
+          "image_url": "/products/echo-studio-earbuds.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.562724Z"
+        },
+        {
+          "id": 2,
+          "name": "Pulse Mini Speaker",
+          "slug": "pulse-mini-speaker",
+          "sku": "AUD-PULSE",
+          "description": "A palm-sized Bluetooth speaker with surprisingly deep bass, IP67 water resistance and a braided carry loop.",
+          "category": {
+            "id": 1,
+            "name": "Audio",
+            "slug": "audio"
+          },
+          "price": "59.00",
+          "stock": 40,
+          "in_stock": true,
+          "image_url": "/products/pulse-mini-speaker.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.561632Z"
         }
       ]
     },
@@ -139,7 +218,7 @@
           "in_stock": true,
           "image_url": "/products/halo-table-lamp.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.309751Z"
+          "created_at": "2026-10-22T21:23:42.568608Z"
         },
         {
           "id": 11,
@@ -157,7 +236,7 @@
           "in_stock": true,
           "image_url": "/products/ember-soy-candle.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.312883Z"
+          "created_at": "2026-10-22T21:23:42.573646Z"
         },
         {
           "id": 10,
@@ -175,7 +254,7 @@
           "in_stock": true,
           "image_url": "/products/fern-planter.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.311745Z"
+          "created_at": "2026-10-22T21:23:42.572094Z"
         },
         {
           "id": 9,
@@ -193,7 +272,86 @@
           "in_stock": true,
           "image_url": "/products/terra-ceramic-mug-set.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.310768Z"
+          "created_at": "2026-10-22T21:23:42.570017Z"
+        }
+      ]
+    },
+    "/products/?category=home-living&page=1&page_size=12": {
+      "count": 4,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": 8,
+          "name": "Halo Table Lamp",
+          "slug": "halo-table-lamp",
+          "sku": "HOM-HALO",
+          "description": "Dimmable LED lamp with a frosted glass globe and a warm 2700K glow, perfect for bedside or desk.",
+          "category": {
+            "id": 3,
+            "name": "Home & Living",
+            "slug": "home-living"
+          },
+          "price": "74.00",
+          "stock": 18,
+          "in_stock": true,
+          "image_url": "/products/halo-table-lamp.svg",
+          "is_featured": true,
+          "created_at": "2026-10-22T21:23:42.568608Z"
+        },
+        {
+          "id": 11,
+          "name": "Ember Soy Candle",
+          "slug": "ember-soy-candle",
+          "sku": "HOM-EMBER",
+          "description": "Hand-poured soy wax candle with notes of cedar, amber and smoked vanilla. Roughly 45 hours of burn time.",
+          "category": {
+            "id": 3,
+            "name": "Home & Living",
+            "slug": "home-living"
+          },
+          "price": "22.00",
+          "stock": 35,
+          "in_stock": true,
+          "image_url": "/products/ember-soy-candle.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.573646Z"
+        },
+        {
+          "id": 10,
+          "name": "Fern Planter",
+          "slug": "fern-planter",
+          "sku": "HOM-FERN",
+          "description": "Matte terracotta planter with a drainage tray, sized for ferns, pothos and other leafy friends.",
+          "category": {
+            "id": 3,
+            "name": "Home & Living",
+            "slug": "home-living"
+          },
+          "price": "28.00",
+          "stock": 4,
+          "in_stock": true,
+          "image_url": "/products/fern-planter.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.572094Z"
+        },
+        {
+          "id": 9,
+          "name": "Terra Ceramic Mug Set",
+          "slug": "terra-ceramic-mug-set",
+          "sku": "HOM-TERRA",
+          "description": "Set of two stoneware mugs, hand-glazed in earthy tones. Dishwasher and microwave safe.",
+          "category": {
+            "id": 3,
+            "name": "Home & Living",
+            "slug": "home-living"
+          },
+          "price": "32.00",
+          "stock": 50,
+          "in_stock": true,
+          "image_url": "/products/terra-ceramic-mug-set.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.570017Z"
         }
       ]
     },
@@ -218,7 +376,7 @@
           "in_stock": true,
           "image_url": "/products/summit-daypack.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.318599Z"
+          "created_at": "2026-10-22T21:23:42.580491Z"
         },
         {
           "id": 18,
@@ -236,7 +394,7 @@
           "in_stock": true,
           "image_url": "/products/nomad-instant-camera.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.320732Z"
+          "created_at": "2026-10-22T21:23:42.582962Z"
         },
         {
           "id": 17,
@@ -254,7 +412,68 @@
           "in_stock": true,
           "image_url": "/products/tide-insulated-bottle.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.319578Z"
+          "created_at": "2026-10-22T21:23:42.581822Z"
+        }
+      ]
+    },
+    "/products/?category=travel-outdoor&page=1&page_size=12": {
+      "count": 3,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": 16,
+          "name": "Summit Daypack",
+          "slug": "summit-daypack",
+          "sku": "TRV-SUMMIT",
+          "description": "A 22L weather-resistant backpack with a padded laptop sleeve, hidden passport pocket and recycled nylon shell.",
+          "category": {
+            "id": 5,
+            "name": "Travel & Outdoor",
+            "slug": "travel-outdoor"
+          },
+          "price": "98.00",
+          "stock": 22,
+          "in_stock": true,
+          "image_url": "/products/summit-daypack.svg",
+          "is_featured": true,
+          "created_at": "2026-10-22T21:23:42.580491Z"
+        },
+        {
+          "id": 18,
+          "name": "Nomad Instant Camera",
+          "slug": "nomad-instant-camera",
+          "sku": "TRV-NOMAD",
+          "description": "Point-and-shoot instant camera with automatic exposure, a selfie mirror and a built-in flash.",
+          "category": {
+            "id": 5,
+            "name": "Travel & Outdoor",
+            "slug": "travel-outdoor"
+          },
+          "price": "119.00",
+          "stock": 9,
+          "in_stock": true,
+          "image_url": "/products/nomad-instant-camera.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.582962Z"
+        },
+        {
+          "id": 17,
+          "name": "Tide Insulated Bottle",
+          "slug": "tide-insulated-bottle",
+          "sku": "TRV-TIDE",
+          "description": "Double-wall stainless steel bottle that keeps drinks cold for 24 hours or hot for 12. Leak-proof lid.",
+          "category": {
+            "id": 5,
+            "name": "Travel & Outdoor",
+            "slug": "travel-outdoor"
+          },
+          "price": "34.00",
+          "stock": 45,
+          "in_stock": true,
+          "image_url": "/products/tide-insulated-bottle.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.581822Z"
         }
       ]
     },
@@ -279,7 +498,7 @@
           "in_stock": true,
           "image_url": "/products/meridian-smartwatch.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.306248Z"
+          "created_at": "2026-10-22T21:23:42.565134Z"
         },
         {
           "id": 7,
@@ -297,7 +516,7 @@
           "in_stock": false,
           "image_url": "/products/horizon-sunglasses.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.308606Z"
+          "created_at": "2026-10-22T21:23:42.567216Z"
         },
         {
           "id": 6,
@@ -315,7 +534,68 @@
           "in_stock": true,
           "image_url": "/products/stride-fitness-band.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.307386Z"
+          "created_at": "2026-10-22T21:23:42.566255Z"
+        }
+      ]
+    },
+    "/products/?category=wearables&page=1&page_size=12": {
+      "count": 3,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": 5,
+          "name": "Meridian Smartwatch",
+          "slug": "meridian-smartwatch",
+          "sku": "WEA-MERIDIAN",
+          "description": "Always-on AMOLED display, heart-rate and sleep tracking, and a week of battery in a brushed aluminium case.",
+          "category": {
+            "id": 2,
+            "name": "Wearables",
+            "slug": "wearables"
+          },
+          "price": "229.00",
+          "stock": 15,
+          "in_stock": true,
+          "image_url": "/products/meridian-smartwatch.svg",
+          "is_featured": true,
+          "created_at": "2026-10-22T21:23:42.565134Z"
+        },
+        {
+          "id": 7,
+          "name": "Horizon Sunglasses",
+          "slug": "horizon-sunglasses",
+          "sku": "WEA-HORIZON",
+          "description": "Polarised lenses in a lightweight acetate frame with UV400 protection and a recycled-felt case.",
+          "category": {
+            "id": 2,
+            "name": "Wearables",
+            "slug": "wearables"
+          },
+          "price": "89.00",
+          "stock": 0,
+          "in_stock": false,
+          "image_url": "/products/horizon-sunglasses.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.567216Z"
+        },
+        {
+          "id": 6,
+          "name": "Stride Fitness Band",
+          "slug": "stride-fitness-band",
+          "sku": "WEA-STRIDE",
+          "description": "Lightweight activity band that counts steps, tracks workouts and nudges you to move, with a soft silicone strap.",
+          "category": {
+            "id": 2,
+            "name": "Wearables",
+            "slug": "wearables"
+          },
+          "price": "49.00",
+          "stock": 60,
+          "in_stock": true,
+          "image_url": "/products/stride-fitness-band.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.566255Z"
         }
       ]
     },
@@ -340,7 +620,7 @@
           "in_stock": true,
           "image_url": "/products/keystone-mechanical-keyboard.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.313988Z"
+          "created_at": "2026-10-22T21:23:42.575054Z"
         },
         {
           "id": 15,
@@ -358,7 +638,7 @@
           "in_stock": true,
           "image_url": "/products/arc-laptop-stand.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.317383Z"
+          "created_at": "2026-10-22T21:23:42.579073Z"
         },
         {
           "id": 14,
@@ -376,7 +656,7 @@
           "in_stock": true,
           "image_url": "/products/folio-linen-notebook.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.316299Z"
+          "created_at": "2026-10-22T21:23:42.577701Z"
         },
         {
           "id": 13,
@@ -394,7 +674,86 @@
           "in_stock": true,
           "image_url": "/products/glide-wireless-mouse.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.315102Z"
+          "created_at": "2026-10-22T21:23:42.576393Z"
+        }
+      ]
+    },
+    "/products/?category=workspace&page=1&page_size=12": {
+      "count": 4,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": 12,
+          "name": "Keystone Mechanical Keyboard",
+          "slug": "keystone-mechanical-keyboard",
+          "sku": "WRK-KEYSTONE",
+          "description": "75% hot-swappable keyboard with gasket mount, PBT keycaps and tactile switches. USB-C and Bluetooth.",
+          "category": {
+            "id": 4,
+            "name": "Workspace",
+            "slug": "workspace"
+          },
+          "price": "139.00",
+          "stock": 20,
+          "in_stock": true,
+          "image_url": "/products/keystone-mechanical-keyboard.svg",
+          "is_featured": true,
+          "created_at": "2026-10-22T21:23:42.575054Z"
+        },
+        {
+          "id": 15,
+          "name": "Arc Laptop Stand",
+          "slug": "arc-laptop-stand",
+          "sku": "WRK-ARC",
+          "description": "Anodised aluminium stand that lifts your screen to eye level and folds flat for travel.",
+          "category": {
+            "id": 4,
+            "name": "Workspace",
+            "slug": "workspace"
+          },
+          "price": "64.00",
+          "stock": 2,
+          "in_stock": true,
+          "image_url": "/products/arc-laptop-stand.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.579073Z"
+        },
+        {
+          "id": 14,
+          "name": "Folio Linen Notebook",
+          "slug": "folio-linen-notebook",
+          "sku": "WRK-FOLIO",
+          "description": "A5 linen-bound notebook with 160 pages of dotted, fountain-pen friendly paper and a lay-flat binding.",
+          "category": {
+            "id": 4,
+            "name": "Workspace",
+            "slug": "workspace"
+          },
+          "price": "18.00",
+          "stock": 80,
+          "in_stock": true,
+          "image_url": "/products/folio-linen-notebook.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.577701Z"
+        },
+        {
+          "id": 13,
+          "name": "Glide Wireless Mouse",
+          "slug": "glide-wireless-mouse",
+          "sku": "WRK-GLIDE",
+          "description": "Ergonomic mouse with a silent click, 4000 DPI sensor and a battery that lasts months on a single charge.",
+          "category": {
+            "id": 4,
+            "name": "Workspace",
+            "slug": "workspace"
+          },
+          "price": "45.00",
+          "stock": 30,
+          "in_stock": true,
+          "image_url": "/products/glide-wireless-mouse.svg",
+          "is_featured": false,
+          "created_at": "2026-10-22T21:23:42.576393Z"
         }
       ]
     },
@@ -419,7 +778,7 @@
           "in_stock": true,
           "image_url": "/products/summit-daypack.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.318599Z"
+          "created_at": "2026-10-22T21:23:42.580491Z"
         },
         {
           "id": 12,
@@ -437,7 +796,7 @@
           "in_stock": true,
           "image_url": "/products/keystone-mechanical-keyboard.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.313988Z"
+          "created_at": "2026-10-22T21:23:42.575054Z"
         },
         {
           "id": 8,
@@ -455,7 +814,7 @@
           "in_stock": true,
           "image_url": "/products/halo-table-lamp.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.309751Z"
+          "created_at": "2026-10-22T21:23:42.568608Z"
         },
         {
           "id": 5,
@@ -473,7 +832,7 @@
           "in_stock": true,
           "image_url": "/products/meridian-smartwatch.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.306248Z"
+          "created_at": "2026-10-22T21:23:42.565134Z"
         },
         {
           "id": 1,
@@ -491,7 +850,7 @@
           "in_stock": true,
           "image_url": "/products/aurora-wireless-headphones.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.301326Z"
+          "created_at": "2026-10-22T21:23:42.559907Z"
         },
         {
           "id": 18,
@@ -509,7 +868,7 @@
           "in_stock": true,
           "image_url": "/products/nomad-instant-camera.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.320732Z"
+          "created_at": "2026-10-22T21:23:42.582962Z"
         },
         {
           "id": 17,
@@ -527,7 +886,7 @@
           "in_stock": true,
           "image_url": "/products/tide-insulated-bottle.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.319578Z"
+          "created_at": "2026-10-22T21:23:42.581822Z"
         },
         {
           "id": 15,
@@ -545,7 +904,7 @@
           "in_stock": true,
           "image_url": "/products/arc-laptop-stand.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.317383Z"
+          "created_at": "2026-10-22T21:23:42.579073Z"
         },
         {
           "id": 14,
@@ -563,7 +922,7 @@
           "in_stock": true,
           "image_url": "/products/folio-linen-notebook.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.316299Z"
+          "created_at": "2026-10-22T21:23:42.577701Z"
         },
         {
           "id": 13,
@@ -581,7 +940,7 @@
           "in_stock": true,
           "image_url": "/products/glide-wireless-mouse.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.315102Z"
+          "created_at": "2026-10-22T21:23:42.576393Z"
         },
         {
           "id": 11,
@@ -599,7 +958,7 @@
           "in_stock": true,
           "image_url": "/products/ember-soy-candle.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.312883Z"
+          "created_at": "2026-10-22T21:23:42.573646Z"
         },
         {
           "id": 10,
@@ -617,7 +976,7 @@
           "in_stock": true,
           "image_url": "/products/fern-planter.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.311745Z"
+          "created_at": "2026-10-22T21:23:42.572094Z"
         },
         {
           "id": 9,
@@ -635,7 +994,7 @@
           "in_stock": true,
           "image_url": "/products/terra-ceramic-mug-set.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.310768Z"
+          "created_at": "2026-10-22T21:23:42.570017Z"
         },
         {
           "id": 7,
@@ -653,7 +1012,7 @@
           "in_stock": false,
           "image_url": "/products/horizon-sunglasses.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.308606Z"
+          "created_at": "2026-10-22T21:23:42.567216Z"
         },
         {
           "id": 6,
@@ -671,7 +1030,7 @@
           "in_stock": true,
           "image_url": "/products/stride-fitness-band.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.307386Z"
+          "created_at": "2026-10-22T21:23:42.566255Z"
         },
         {
           "id": 4,
@@ -689,7 +1048,7 @@
           "in_stock": true,
           "image_url": "/products/groove-desk-turntable.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.305156Z"
+          "created_at": "2026-10-22T21:23:42.563893Z"
         },
         {
           "id": 3,
@@ -707,7 +1066,7 @@
           "in_stock": true,
           "image_url": "/products/echo-studio-earbuds.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.304093Z"
+          "created_at": "2026-10-22T21:23:42.562724Z"
         },
         {
           "id": 2,
@@ -725,7 +1084,7 @@
           "in_stock": true,
           "image_url": "/products/pulse-mini-speaker.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.302918Z"
+          "created_at": "2026-10-22T21:23:42.561632Z"
         }
       ]
     },
@@ -750,7 +1109,7 @@
           "in_stock": true,
           "image_url": "/products/summit-daypack.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.318599Z"
+          "created_at": "2026-10-22T21:23:42.580491Z"
         },
         {
           "id": 12,
@@ -768,7 +1127,7 @@
           "in_stock": true,
           "image_url": "/products/keystone-mechanical-keyboard.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.313988Z"
+          "created_at": "2026-10-22T21:23:42.575054Z"
         },
         {
           "id": 8,
@@ -786,7 +1145,7 @@
           "in_stock": true,
           "image_url": "/products/halo-table-lamp.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.309751Z"
+          "created_at": "2026-10-22T21:23:42.568608Z"
         },
         {
           "id": 5,
@@ -804,7 +1163,7 @@
           "in_stock": true,
           "image_url": "/products/meridian-smartwatch.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.306248Z"
+          "created_at": "2026-10-22T21:23:42.565134Z"
         },
         {
           "id": 1,
@@ -822,7 +1181,7 @@
           "in_stock": true,
           "image_url": "/products/aurora-wireless-headphones.svg",
           "is_featured": true,
-          "created_at": "2026-10-22T20:46:14.301326Z"
+          "created_at": "2026-10-22T21:23:42.559907Z"
         },
         {
           "id": 18,
@@ -840,7 +1199,7 @@
           "in_stock": true,
           "image_url": "/products/nomad-instant-camera.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.320732Z"
+          "created_at": "2026-10-22T21:23:42.582962Z"
         },
         {
           "id": 17,
@@ -858,7 +1217,7 @@
           "in_stock": true,
           "image_url": "/products/tide-insulated-bottle.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.319578Z"
+          "created_at": "2026-10-22T21:23:42.581822Z"
         },
         {
           "id": 15,
@@ -876,7 +1235,7 @@
           "in_stock": true,
           "image_url": "/products/arc-laptop-stand.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.317383Z"
+          "created_at": "2026-10-22T21:23:42.579073Z"
         },
         {
           "id": 14,
@@ -894,7 +1253,7 @@
           "in_stock": true,
           "image_url": "/products/folio-linen-notebook.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.316299Z"
+          "created_at": "2026-10-22T21:23:42.577701Z"
         },
         {
           "id": 13,
@@ -912,7 +1271,7 @@
           "in_stock": true,
           "image_url": "/products/glide-wireless-mouse.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.315102Z"
+          "created_at": "2026-10-22T21:23:42.576393Z"
         },
         {
           "id": 11,
@@ -930,7 +1289,7 @@
           "in_stock": true,
           "image_url": "/products/ember-soy-candle.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.312883Z"
+          "created_at": "2026-10-22T21:23:42.573646Z"
         },
         {
           "id": 10,
@@ -948,7 +1307,7 @@
           "in_stock": true,
           "image_url": "/products/fern-planter.svg",
           "is_featured": false,
-          "created_at": "2026-10-22T20:46:14.311745Z"
+          "created_at": "2026-10-22T21:23:42.572094Z"
         }
       ]
     },
@@ -968,7 +1327,7 @@
       "in_stock": true,
       "image_url": "/products/arc-laptop-stand.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.317383Z"
+      "created_at": "2026-10-22T21:23:42.579073Z"
     },
     "/products/aurora-wireless-headphones/": {
       "id": 1,
@@ -986,7 +1345,7 @@
       "in_stock": true,
       "image_url": "/products/aurora-wireless-headphones.svg",
       "is_featured": true,
-      "created_at": "2026-10-22T20:46:14.301326Z"
+      "created_at": "2026-10-22T21:23:42.559907Z"
     },
     "/products/echo-studio-earbuds/": {
       "id": 3,
@@ -1004,7 +1363,7 @@
       "in_stock": true,
       "image_url": "/products/echo-studio-earbuds.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.304093Z"
+      "created_at": "2026-10-22T21:23:42.562724Z"
     },
     "/products/ember-soy-candle/": {
       "id": 11,
@@ -1022,7 +1381,7 @@
       "in_stock": true,
       "image_url": "/products/ember-soy-candle.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.312883Z"
+      "created_at": "2026-10-22T21:23:42.573646Z"
     },
     "/products/fern-planter/": {
       "id": 10,
@@ -1040,7 +1399,7 @@
       "in_stock": true,
       "image_url": "/products/fern-planter.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.311745Z"
+      "created_at": "2026-10-22T21:23:42.572094Z"
     },
     "/products/folio-linen-notebook/": {
       "id": 14,
@@ -1058,7 +1417,7 @@
       "in_stock": true,
       "image_url": "/products/folio-linen-notebook.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.316299Z"
+      "created_at": "2026-10-22T21:23:42.577701Z"
     },
     "/products/glide-wireless-mouse/": {
       "id": 13,
@@ -1076,7 +1435,7 @@
       "in_stock": true,
       "image_url": "/products/glide-wireless-mouse.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.315102Z"
+      "created_at": "2026-10-22T21:23:42.576393Z"
     },
     "/products/groove-desk-turntable/": {
       "id": 4,
@@ -1094,7 +1453,7 @@
       "in_stock": true,
       "image_url": "/products/groove-desk-turntable.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.305156Z"
+      "created_at": "2026-10-22T21:23:42.563893Z"
     },
     "/products/halo-table-lamp/": {
       "id": 8,
@@ -1112,7 +1471,7 @@
       "in_stock": true,
       "image_url": "/products/halo-table-lamp.svg",
       "is_featured": true,
-      "created_at": "2026-10-22T20:46:14.309751Z"
+      "created_at": "2026-10-22T21:23:42.568608Z"
     },
     "/products/horizon-sunglasses/": {
       "id": 7,
@@ -1130,7 +1489,7 @@
       "in_stock": false,
       "image_url": "/products/horizon-sunglasses.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.308606Z"
+      "created_at": "2026-10-22T21:23:42.567216Z"
     },
     "/products/keystone-mechanical-keyboard/": {
       "id": 12,
@@ -1148,7 +1507,7 @@
       "in_stock": true,
       "image_url": "/products/keystone-mechanical-keyboard.svg",
       "is_featured": true,
-      "created_at": "2026-10-22T20:46:14.313988Z"
+      "created_at": "2026-10-22T21:23:42.575054Z"
     },
     "/products/meridian-smartwatch/": {
       "id": 5,
@@ -1166,7 +1525,7 @@
       "in_stock": true,
       "image_url": "/products/meridian-smartwatch.svg",
       "is_featured": true,
-      "created_at": "2026-10-22T20:46:14.306248Z"
+      "created_at": "2026-10-22T21:23:42.565134Z"
     },
     "/products/nomad-instant-camera/": {
       "id": 18,
@@ -1184,7 +1543,7 @@
       "in_stock": true,
       "image_url": "/products/nomad-instant-camera.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.320732Z"
+      "created_at": "2026-10-22T21:23:42.582962Z"
     },
     "/products/pulse-mini-speaker/": {
       "id": 2,
@@ -1202,7 +1561,7 @@
       "in_stock": true,
       "image_url": "/products/pulse-mini-speaker.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.302918Z"
+      "created_at": "2026-10-22T21:23:42.561632Z"
     },
     "/products/stride-fitness-band/": {
       "id": 6,
@@ -1220,7 +1579,7 @@
       "in_stock": true,
       "image_url": "/products/stride-fitness-band.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.307386Z"
+      "created_at": "2026-10-22T21:23:42.566255Z"
     },
     "/products/summit-daypack/": {
       "id": 16,
@@ -1238,7 +1597,7 @@
       "in_stock": true,
       "image_url": "/products/summit-daypack.svg",
       "is_featured": true,
-      "created_at": "2026-10-22T20:46:14.318599Z"
+      "created_at": "2026-10-22T21:23:42.580491Z"
     },
     "/products/terra-ceramic-mug-set/": {
       "id": 9,
@@ -1256,7 +1615,7 @@
       "in_stock": true,
       "image_url": "/products/terra-ceramic-mug-set.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.310768Z"
+      "created_at": "2026-10-22T21:23:42.570017Z"
     },
     "/products/tide-insulated-bottle/": {
       "id": 17,
@@ -1274,7 +1633,7 @@
       "in_stock": true,
       "image_url": "/products/tide-insulated-bottle.svg",
       "is_featured": false,
-      "created_at": "2026-10-22T20:46:14.319578Z"
+      "created_at": "2026-10-22T21:23:42.581822Z"
     }
   }
 }

@@ -49,7 +49,9 @@ describe("prerender routing", () => {
     expect(prerenderedFile("/", "")).toBe("index.html");
     expect(prerenderedFile("/protection", "")).toBe("protection.html");
     expect(prerenderedFile("/shop", "")).toBe("shop.html");
-    expect(prerenderedFile("/shop", "?category=audio")).toBeNull();
+    expect(prerenderedFile("/shop", "?category=audio")).toBe("shop/audio.html");
+    expect(prerenderedFile("/shop", "?category=audio&page=2")).toBeNull();
+    expect(prerenderedFile("/shop", "?search=lamp")).toBeNull();
     expect(prerenderedFile("/products/halo-table-lamp", "")).toBe("products/halo-table-lamp.html");
     for (const path of ["/cart", "/checkout", "/admin", "/products/a/b", "/products/../x"]) {
       expect(prerenderedFile(path, "")).toBeNull();
@@ -60,7 +62,8 @@ describe("prerender routing", () => {
     expect(pages.map((p) => p.url)).toEqual(
       expect.arrayContaining(["/", "/shop", "/protection", "/products/halo-table-lamp"]),
     );
-    expect(pages).toHaveLength(3 + catalog.length);
+    const categories = new Set(catalog.map((p) => p.category.slug));
+    expect(pages).toHaveLength(3 + categories.size + catalog.length);
     for (const page of pages) {
       for (const query of page.queries) expect(snapshot.responses).toHaveProperty([query.path]);
     }
@@ -78,6 +81,10 @@ describe("prerender payload", () => {
     expect(canHydrate(payload, { pathname: "/shop", search: "" })).toBe(true);
     expect(canHydrate(payload, { pathname: "/shop", search: "?category=audio" })).toBe(false);
     expect(canHydrate(payload, { pathname: "/shop/", search: "" })).toBe(false);
+    const audio = { ...payload, url: "/shop?category=audio" };
+    expect(canHydrate(audio, { pathname: "/shop", search: "?category=audio" })).toBe(true);
+    expect(canHydrate(audio, { pathname: "/shop", search: "" })).toBe(false);
+    expect(canHydrate(audio, { pathname: "/shop", search: "?category=wearables" })).toBe(false);
     const home = { ...payload, url: "/", exactSearch: false };
     expect(canHydrate(home, { pathname: "/", search: "?utm_source=x" })).toBe(true);
   });
@@ -96,7 +103,7 @@ describe("prerender payload", () => {
 });
 
 describe("prerendered pages", () => {
-  it.each(["/", "/protection", "/shop", "/products/halo-table-lamp"])(
+  it.each(["/", "/protection", "/shop", "/shop?category=audio", "/products/halo-table-lamp"])(
     "%s carries its whole content in the HTML",
     async (url) => {
       const { html } = await renderPage(pageFor(url), snapshot.responses, capturedAt);
@@ -116,6 +123,11 @@ describe("prerendered pages", () => {
         expect(text).toContain("Charged once. Never oversold.");
       }
       if (url === "/shop") expect(text).toContain(`${String(catalog.length)} products`);
+      if (url === "/shop?category=audio") {
+        const audio = catalog.filter((p) => p.category.slug === "audio");
+        expect(text).toContain(`${String(audio.length)} products`);
+        for (const p of audio) expect(text).toContain(p.name);
+      }
       if (url === "/products/halo-table-lamp") {
         expect(text).toContain("Halo Table Lamp");
         expect(text).toContain("Compare Home & Living.");

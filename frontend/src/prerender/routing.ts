@@ -7,8 +7,13 @@
 export function prerenderedFile(pathname: string, search: string): string | null {
   if (pathname === "/") return "index.html";
   if (pathname === "/protection") return "protection.html";
-  // The shop reads its query string, so only the bare URL has a prerendered page.
-  if (pathname === "/shop") return search === "" || search === "?" ? "shop.html" : null;
+  // The shop reads its query string: only the bare URL and a lone category filter (the
+  // links in the nav and footer) have prerendered pages.
+  if (pathname === "/shop") {
+    if (search === "" || search === "?") return "shop.html";
+    const category = /^\?category=([a-z0-9-]+)$/.exec(search);
+    return category?.[1] ? `shop/${category[1]}.html` : null;
+  }
   const product = /^\/products\/([a-z0-9-]+)$/.exec(pathname);
   return product?.[1] ? `products/${product[1]}.html` : null;
 }

@@ -22,8 +22,10 @@ test.describe("Prerendered public pages", () => {
       await expect(page.getByText(text).first()).toBeVisible();
       await expect(page.getByRole("contentinfo")).toContainText("Arya Mahindrakar");
     }
-    // Private and filtered URLs still get the plain app shell.
     await page.goto("/shop?category=audio");
+    await expect(page.getByRole("heading", { level: 1, name: "Audio" })).toBeVisible();
+    // Searches and private pages still get the plain app shell.
+    await page.goto("/shop?search=lamp");
     await expect(page.locator("#root")).toBeEmpty();
     await context.close();
   });

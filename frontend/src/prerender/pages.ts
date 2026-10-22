@@ -3,7 +3,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { keys } from "@/hooks/queries";
 import { HOME_CATALOG_QUERY, relatedQuery, shopQuery } from "@/lib/catalogQueries";
 import { catalogPaths, type ProductQuery } from "@/lib/endpoints";
-import type { Product } from "@/lib/types";
+import type { CategoryRef, Product } from "@/lib/types";
 import { HOME_TITLE, pageTitle } from "@/lib/useDocumentTitle";
 
 /*
@@ -19,11 +19,11 @@ export interface PrerenderQuery {
 }
 
 export interface PrerenderPage {
-  /** Path the page answers on. */
+  /** Path (and, for exactSearch pages, query string) the page answers on. */
   url: string;
   /** Output file under dist/_prerender/. */
   file: string;
-  /** The page reads its query string (the shop), so only the bare URL may hydrate. */
+  /** The page reads its query string (the shop): only this exact query may hydrate it. */
   exactSearch: boolean;
   title: string;
   description: string;
@@ -41,6 +41,11 @@ function products(params: ProductQuery): PrerenderQuery {
 
 /** The read every page plan starts from: the whole (small) public catalog. */
 export const CATALOG_PATH = catalogPaths.products(HOME_CATALOG_QUERY);
+
+function uniqueCategories(catalog: Product[]): CategoryRef[] {
+  const bySlug = new Map(catalog.map((p) => [p.category.slug, p.category]));
+  return [...bySlug.values()];
+}
 
 export function prerenderPages(catalog: Product[]): PrerenderPage[] {
   return [
@@ -69,6 +74,15 @@ export function prerenderPages(catalog: Product[]): PrerenderPage[] {
         "Signing in, filling your bag, paying and everything after: what protects each moment of a SecureCart order, and where it lives in the code.",
       queries: [categories],
     },
+    // Each category's shop page, the way the nav and footer link to it.
+    ...uniqueCategories(catalog).map((category) => ({
+      url: `/shop?category=${category.slug}`,
+      file: `shop/${category.slug}.html`,
+      exactSearch: true,
+      title: pageTitle(category.name),
+      description: `${category.name} at SecureCart, with live stock on every item.`,
+      queries: [products(shopQuery(new URLSearchParams({ category: category.slug }))), categories],
+    })),
     ...catalog.map((product) => ({
       url: `/products/${product.slug}`,
       file: `products/${product.slug}.html`,
