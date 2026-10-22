@@ -38,6 +38,14 @@ jobs:
       stripe-mock:
         image: stripe/stripe-mock:v0.206.0
         ports: ["12111:12111"]
+      redis:
+        image: redis:8.8.3-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     env:
       DATABASE_URL: postgres://securecart:securecart@localhost:5432/securecart
       # Real SMTP delivery tests (tests/test_mailpit.py) run against this Mailpit.
@@ -45,6 +53,8 @@ jobs:
       MAILPIT_SMTP_PORT: "1025"
       # Stripe API contract tests (tests/test_stripe.py) run against stripe-mock.
       STRIPE_MOCK_URL: http://localhost:12111
+      # Atomic rate limits and the catalog cache (tests/test_cache_and_throttling.py).
+      REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -239,6 +249,7 @@ jobs:
         env:
           DJANGO_SECRET_KEY: build-only
           POSTGRES_PASSWORD: build-only
+          REDIS_PASSWORD: build-only
         run: docker compose build
       - name: Scan shipped images (fail on fixable HIGH/CRITICAL)
         run: scripts/scan_images.sh gate
@@ -266,6 +277,7 @@ jobs:
           {
             echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)"
             echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "REDIS_PASSWORD=$(openssl rand -hex 24)"
           } > .env
       - name: Build images
         run: docker compose build
@@ -275,7 +287,12 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS http://localhost:8080/healthz
-          curl -fsS http://localhost:8080/api/health/ | grep -q '"ok"'
+          curl -fsS http://localhost:8080/api/health/ | grep -q '"redis":"ok"'
+          # The catalog is served from Redis on the second read.
+          curl -fsS -o /dev/null "http://localhost:8080/api/products/?search=lamp"
+          curl -fsS -D - -o /dev/null "http://localhost:8080/api/products/?search=lamp" | grep -qi "x-cache: HIT"
+          # The scheduler has run its jobs at least once.
+          docker compose exec -T scheduler test -f /tmp/scheduler-heartbeat
           curl -fsS "http://localhost:8080/api/products/?search=lamp" | grep -q "Halo Table Lamp"
           curl -fsSI http://localhost:8080/ | grep -qi "content-security-policy"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/admin/dashboard/)" = "401"

@@ -1,22 +1,37 @@
 from django.db import connection
 from django.http import HttpRequest, JsonResponse
 from drf_spectacular.utils import extend_schema, inline_serializer
+from redis.exceptions import RedisError
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core import ratelimit
+
 
 class HealthView(APIView):
-    """Liveness + readiness probe used by Docker/Kubernetes health checks."""
+    """Liveness + readiness probe used by Docker/Kubernetes health checks.
+
+    The database is required (503 without it). Redis, when configured, is reported but not
+    required: the API keeps serving without it (the catalog goes uncached, general rate
+    limits open, credential limits close), so pulling every replica out of rotation over a
+    cache outage would turn a degradation into an outage.
+    """
 
     permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = []
 
     @extend_schema(
-        responses=inline_serializer("Health", {"status": serializers.CharField()}),
+        responses=inline_serializer(
+            "Health",
+            {
+                "status": serializers.CharField(),
+                "redis": serializers.CharField(required=False),
+            },
+        ),
         tags=["system"],
     )
     def get(self, request: Request) -> Response:
@@ -25,7 +40,15 @@ class HealthView(APIView):
                 cursor.execute("SELECT 1")
         except Exception:  # pragma: no cover - exercised only when the DB is down
             return Response({"status": "degraded"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        return Response({"status": "ok"})
+        body = {"status": "ok"}
+        client = ratelimit.redis_client()
+        if client is not None:
+            try:
+                client.ping()
+                body["redis"] = "ok"
+            except RedisError:
+                body["redis"] = "unavailable"
+        return Response(body)
 
 
 # ---------------------------------------------------------------------------------------

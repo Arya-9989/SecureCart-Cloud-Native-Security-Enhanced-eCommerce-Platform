@@ -10,6 +10,9 @@ from config.settings import *  # noqa: F403
 # Fast hashing in tests only; production uses Argon2 (see settings.PASSWORD_HASHERS).
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+# Redis-backed tests opt in explicitly (tests/test_cache_and_throttling.py reads REDIS_URL),
+# so shared limiter state can never leak between unrelated tests.
+REDIS_URL = ""
 MIDDLEWARE = [m for m in MIDDLEWARE if "whitenoise" not in m]  # noqa: F405
 STORAGES = {"staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
 REST_FRAMEWORK = {

@@ -18,6 +18,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.catalog import cache as catalog_cache
 from apps.catalog.models import Product
 from apps.orders.models import Order, OrderEvent, OrderStatus
 from apps.payments.registry import get_payment_provider
@@ -100,6 +101,7 @@ def transition(
 def _release_stock(order: Order) -> None:
     for item in order.items.all():
         Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
+    catalog_cache.bump_after_commit()
 
 
 def _refund(order: Order) -> None:

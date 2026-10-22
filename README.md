@@ -57,6 +57,10 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 
 **Motion**: quiet and purposeful, with no animation library. `/protection` pins a four-moments story (sign-in, bag, checkout, after you order) whose stages light up along a rail as you scroll, and the checkout chapter's four steps light up in order; the local nav's underline slides between sections; on the home page the lead product steps forward as the page scrolls; a product card morphs into its product page (View Transitions); adding to the bag changes the pressed button to "Added" and the nav's bag icon acknowledges it; the admin revenue line draws in and its bars grow. Scroll-linked motion uses CSS scroll-driven animations, with a small scripted fallback where they are missing. Only opacity and transform animate, nothing is hidden before script or CSS support is confirmed, and with reduced motion every element shows its final state.
 
+**Platform**
+- Catalog responses are cached in Redis and invalidated the moment a product, category or stock level changes (`X-Cache: HIT|MISS` shows which).
+- A scheduler service settles unpaid orders (releasing their stock, or reconciling with Stripe) and purges expired tokens. Each job runs once per interval however many scheduler instances run.
+
 **Admin console** (`/admin`, admin role only)
 - Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts, plus a Ctrl/⌘K command palette.
 - Product and inventory management: create, edit, hide/activate and delete (refused with `409` if the product has order history).
@@ -73,7 +77,10 @@ flowchart LR
     subgraph compose["docker compose"]
         nginx["nginx (unprivileged)<br/>prerendered pages + SPA + CSP headers<br/>reverse proxy /api"]
         api["Django + DRF<br/>gunicorn"]
+        scheduler["Scheduler<br/>run_scheduler"]
         db[("PostgreSQL 17")]
+        redis[("Redis 8<br/>rate limits + catalog cache")]
+        mail["Mailpit<br/>(local SMTP)"]
     end
 
     payment["PaymentProvider<br/>(mock by default, or Stripe test mode)"]
@@ -81,6 +88,9 @@ flowchart LR
     browser -- "single origin" --> nginx
     nginx -- "/api/*, /static/*" --> api
     api -- "ORM, row locks" --> db
+    api -- "atomic limits, cache" --> redis
+    api -- "SMTP" --> mail
+    scheduler -- "job leases, settle orders" --> db
     api -- "charge / refund" --> payment
     payment -. "signed webhooks" .-> api
 ```
@@ -123,7 +133,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 | **Authorization (RBAC)** | An `IsAdminRole` permission guards every admin endpoint. The role is read from the database on each request, not from token claims, so demotion or suspension takes effect immediately. Admins cannot demote or suspend themselves, and role/status changes revoke the target user's sessions. |
 | **Object-level access** | Orders and cart items are always queried through the requesting user, so another user's order returns `404` (no ID enumeration). Order URLs use UUIDs. |
 | **Input validation** | DRF serializers on every write; database `CHECK` constraints (`price > 0`, `stock >= 0`, `quantity >= 1`); strict formats for SKUs, postal codes, country codes and image URLs (site-relative or `https://` only, so no `javascript:` or protocol-relative URLs). JSON-only parsers and a 1 MiB body limit. |
-| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change (keyed by IP even for signed-in callers, so a stolen access token cannot brute-force the current password); 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; 5/min per IP on endpoints that send email, plus a silent per-inbox budget (3/hour, which unknown addresses spend too) so nobody can flood someone else's inbox; plus global anonymous/user limits. A database-backed cache keeps counters consistent across gunicorn workers. |
+| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change (keyed by IP even for signed-in callers, so a stolen access token cannot brute-force the current password); 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; 5/min per IP on endpoints that send email, plus a silent per-inbox budget (3/hour, which unknown addresses spend too) so nobody can flood someone else's inbox; plus global anonymous/user limits. Every limit is counted by one atomic Lua script in Redis (a sliding-window log on Redis's own clock), so it holds across workers and replicas. DRF's own read-then-write history admitted 40 of 40 requests against a limit of 10 under contention; the atomic limiter admits exactly 10. If Redis is down, credential and email limits fail closed and the rest fail open ([ADR 0004](docs/adr/0004-redis-rate-limits-catalog-cache-and-scheduler.md)). |
 | **User enumeration** | Sign-in answers the same for an unknown email, a wrong password and an inactive account, and Django's auth backend equalises timing. Forgot-password answers byte-for-byte the same for registered, unknown and suspended addresses, never sooner than 400 ms, and sends mail off the request path, so neither the answer nor the response time reveals an account. Registration still says an address is taken, because it signs the new account in immediately; it is limited to 10 attempts a minute per IP. |
 | **Headers** | nginx sends a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` and COOP. Django adds its own CSP for the API docs and `Cache-Control: no-store` on API responses. HSTS and SSL redirect are configurable for TLS deployments. |
 | **Error leakage** | Every API error, including unknown routes and unhandled exceptions, answers with the same JSON envelope and never includes exception details. |
@@ -203,7 +213,7 @@ npm run dev
 
 Different ports: `uv run python manage.py runserver 127.0.0.1:8001` for the API, then `VITE_PORT=5180 VITE_DEV_API_PROXY=http://127.0.0.1:8001 npm run dev` for the SPA.
 
-Other commands: `uv run python manage.py expire_pending_orders --minutes 30` releases stock held by abandoned payments, and `python scripts/screenshots.py --base-url http://localhost:8080` regenerates the README screenshots. To scan the images as CI does, run `docker compose build && scripts/scan_images.sh gate` (needs [Trivy](https://trivy.dev) on `PATH`, or point `TRIVY` at the binary).
+Other commands: `uv run python manage.py run_scheduler` runs the periodic jobs (compose runs it as the `scheduler` service; `--once` runs one tick), `uv run python manage.py expire_pending_orders --minutes 30` settles abandoned payments by hand, and `python scripts/screenshots.py --base-url http://localhost:8080` regenerates the README screenshots. To scan the images as CI does, run `docker compose build && scripts/scan_images.sh gate` (needs [Trivy](https://trivy.dev) on `PATH`, or point `TRIVY` at the binary).
 
 ## Configuration
 
@@ -220,7 +230,10 @@ All configuration comes from environment variables, and the defaults are the sec
 | `JWT_SIGNING_KEY` | `DJANGO_SECRET_KEY` | Separate key so tokens can be rotated independently |
 | `JWT_ACCESS_MINUTES` / `JWT_REFRESH_DAYS` | `10` / `7` | Token lifetimes |
 | `REFRESH_COOKIE_SECURE` | `true` | `Secure` flag on the refresh cookie (`localhost` counts as secure) |
-| `DJANGO_CACHE_BACKEND` | `locmem` | `db` shares throttle state across workers (used in compose) |
+| `REDIS_URL` | *(empty)* | Redis for atomic rate limits and the catalog cache (compose: the `redis` service, password from `REDIS_PASSWORD`, which is required there) |
+| `DJANGO_CACHE_BACKEND` | `redis` with `REDIS_URL`, else `locmem` | `redis`, `db` or `locmem` |
+| `CATALOG_CACHE_SECONDS` | `300` | Longest a cached catalog response lives (writes invalidate it immediately) |
+| `PENDING_ORDER_TIMEOUT_MINUTES` / `SCHEDULER_PENDING_ORDERS_EVERY_SECONDS` | `30` / `300` | When the scheduler settles unpaid orders, and how often it looks |
 | `THROTTLE_AUTH` / `THROTTLE_AUTH_REFRESH` / `THROTTLE_CHECKOUT` | `10/min` / `60/min` / `20/min` | Rate limits (credentials per IP, refresh per IP, checkout per user) |
 | `THROTTLE_ANON` / `THROTTLE_USER` | `120/min` / `600/min` | Global limits for everything else |
 | `NUM_PROXIES` | `0` | Trusted proxy hops for client IPs (`1` behind nginx) |
@@ -334,7 +347,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 
 - Product image uploads to object storage with server-side validation.
 - Invoice PDF generation.
-- Redis for caching and throttling, plus a scheduler for `expire_pending_orders`.
 - Deployment manifests (Kubernetes or a managed container service) with TLS termination.
 
 ## License

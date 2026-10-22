@@ -8,10 +8,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import AllowAny
+from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
 from apps.accounts.permissions import IsAdminRole
 from apps.audit import services as audit
+from apps.catalog import cache as catalog_cache
 from apps.catalog.models import Category, Product
 from apps.catalog.serializers import (
     AdminProductSerializer,
@@ -69,6 +72,14 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet[Product]):
     def get_queryset(self) -> QuerySet[Product]:
         return Product.objects.filter(is_active=True).select_related("category")
 
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return catalog_cache.cached(request, lambda: super(ProductViewSet, self).list(request))
+
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return catalog_cache.cached(
+            request, lambda: super(ProductViewSet, self).retrieve(request, *args, **kwargs)
+        )
+
 
 @extend_schema_view(
     list=extend_schema(tags=["catalog"], summary="List categories with active product counts"),
@@ -84,6 +95,9 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet[Category]):
         return Category.objects.annotate(
             product_count=Count("products", filter=Q(products__is_active=True))
         )
+
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return catalog_cache.cached(request, lambda: super(CategoryViewSet, self).list(request))
 
 
 @extend_schema_view(
@@ -187,3 +201,4 @@ class AdminCategoryViewSet(viewsets.ModelViewSet[Category]):
             target=instance,
             changes={"name": instance.name},
         )
+

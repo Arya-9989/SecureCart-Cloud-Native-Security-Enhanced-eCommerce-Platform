@@ -34,6 +34,7 @@ services:
 
   backend:
     <<: *hardening
+    image: securecart-backend:local
     build:
       context: ./backend
     environment:
@@ -41,7 +42,10 @@ services:
       DJANGO_DEBUG: "false"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080}
-      DJANGO_CACHE_BACKEND: db
+      # Throttle windows and the catalog cache live in Redis, shared by every worker/replica.
+      DJANGO_CACHE_BACKEND: redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
+      CATALOG_CACHE_SECONDS: ${CATALOG_CACHE_SECONDS:-300}
       DATABASE_URL: postgres://${POSTGRES_USER:-securecart}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-securecart}
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
@@ -92,6 +96,70 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Periodic jobs (settle unpaid orders, purge expired tokens). Safe to scale: each job runs
+  # once per interval across all instances (database lease, apps.core.scheduler).
+  scheduler:
+    <<: *hardening
+    image: securecart-backend:local  # same image as the API, built once by that service
+    pull_policy: never
+    command: ["python", "manage.py", "run_scheduler"]
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+      DJANGO_DEBUG: "false"
+      DATABASE_URL: postgres://${POSTGRES_USER:-securecart}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-securecart}
+      DJANGO_CACHE_BACKEND: redis
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      RUN_MIGRATIONS: "false"
+      SEED_DEMO: "false"
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-apps.payments.providers.mock.MockPaymentProvider}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_ALLOW_LIVE_MODE: ${STRIPE_ALLOW_LIVE_MODE:-false}
+      PENDING_ORDER_TIMEOUT_MINUTES: ${PENDING_ORDER_TIMEOUT_MINUTES:-30}
+      SCHEDULER_PENDING_ORDERS_EVERY_SECONDS: ${SCHEDULER_PENDING_ORDERS_EVERY_SECONDS:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      # The loop touches this file every tick (15 s); stale for 2 minutes means it is stuck.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/scheduler-heartbeat') < 120 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    tmpfs:
+      - /tmp
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Cache only: no persistence, bounded memory, least-recently-used eviction.
+  redis:
+    <<: *hardening
+    image: redis:8.8.3-alpine
+    user: "999:1000"
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - allkeys-lru
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /data
 
   # Local SMTP sink with a web inbox. Never deployed: real deployments set EMAIL_HOST.
   mailpit:
@@ -112,6 +180,7 @@ services:
 
   frontend:
     <<: *hardening
+    image: securecart-frontend:local
     build:
       context: ./frontend
       args:

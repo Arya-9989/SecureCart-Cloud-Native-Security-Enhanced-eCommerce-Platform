@@ -86,10 +86,27 @@ DATABASES = {
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Throttling state must be shared by every worker process, so production uses the
-# database cache (created by ``manage.py createcachetable``). LocMem is fine for dev/tests.
-_cache_backend = env_str("DJANGO_CACHE_BACKEND", "locmem")
-if _cache_backend == "db":
+# Shared state (throttle windows, the catalog cache) must be visible to every worker and every
+# replica. Production uses Redis: rate limits are enforced atomically there (see
+# apps.core.ratelimit). "db" and "locmem" remain for single-host and development setups.
+REDIS_URL = env_str("REDIS_URL", "")
+REDIS_TIMEOUT_SECONDS = float(env_str("REDIS_TIMEOUT_SECONDS", "0.5"))
+_cache_backend = env_str("DJANGO_CACHE_BACKEND", "redis" if REDIS_URL else "locmem")
+if _cache_backend == "redis":
+    if not REDIS_URL:
+        raise ImproperlyConfigured("DJANGO_CACHE_BACKEND=redis needs REDIS_URL.")
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "KEY_PREFIX": "securecart",
+            "OPTIONS": {
+                "socket_connect_timeout": REDIS_TIMEOUT_SECONDS,
+                "socket_timeout": REDIS_TIMEOUT_SECONDS,
+            },
+        }
+    }
+elif _cache_backend == "db":
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.db.DatabaseCache",
@@ -99,7 +116,9 @@ if _cache_backend == "db":
 elif _cache_backend == "locmem":
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 else:
-    raise ImproperlyConfigured("DJANGO_CACHE_BACKEND must be 'locmem' or 'db'.")
+    raise ImproperlyConfigured("DJANGO_CACHE_BACKEND must be 'redis', 'db' or 'locmem'.")
+#: Seconds a cached catalog response may live; writes invalidate it sooner (catalog.cache).
+CATALOG_CACHE_SECONDS = env_int("CATALOG_CACHE_SECONDS", 300)
 
 # --------------------------------------------------------------------------------------
 # Auth & passwords
@@ -134,8 +153,8 @@ REST_FRAMEWORK: dict[str, Any] = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
+        "apps.core.throttling.AnonRateThrottle",
+        "apps.core.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": env_str("THROTTLE_ANON", "120/min"),
@@ -286,6 +305,9 @@ FREE_SHIPPING_THRESHOLD = env_str("FREE_SHIPPING_THRESHOLD", "75.00")
 FLAT_SHIPPING_FEE = env_str("FLAT_SHIPPING_FEE", "6.99")
 TAX_RATE = env_str("TAX_RATE", "0.08")
 MAX_CART_LINE_QUANTITY = env_int("MAX_CART_LINE_QUANTITY", 10)
+#: Unpaid orders older than this are settled by the scheduler (stock released or reconciled).
+PENDING_ORDER_TIMEOUT_MINUTES = env_int("PENDING_ORDER_TIMEOUT_MINUTES", 30)
+SCHEDULER_PENDING_ORDERS_EVERY_SECONDS = env_int("SCHEDULER_PENDING_ORDERS_EVERY_SECONDS", 300)
 
 # --------------------------------------------------------------------------------------
 # i18n, static files, logging

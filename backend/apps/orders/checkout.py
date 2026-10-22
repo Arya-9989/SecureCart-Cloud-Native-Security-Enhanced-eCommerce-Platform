@@ -28,6 +28,7 @@ from django.db.models import F
 
 from apps.accounts.models import User
 from apps.cart.models import Cart, CartItem
+from apps.catalog import cache as catalog_cache
 from apps.catalog.models import Product
 from apps.orders import state
 from apps.orders.models import Order, OrderEvent, OrderItem, OrderStatus
@@ -250,6 +251,7 @@ def _reserve(user: User, address: ShippingAddress, idempotency_key: str) -> Orde
     )
     for item in cart_items:
         Product.objects.filter(pk=item.product_id).update(stock=F("stock") - item.quantity)
+    catalog_cache.bump_after_commit()  # stock shown in the catalog changed
     OrderEvent.objects.create(
         order=order, to_status=OrderStatus.PENDING_PAYMENT, note="Order placed; stock reserved"
     )

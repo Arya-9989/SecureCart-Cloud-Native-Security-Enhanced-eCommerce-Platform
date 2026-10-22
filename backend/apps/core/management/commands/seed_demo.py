@@ -20,6 +20,7 @@ from django.utils.text import slugify
 
 from apps.accounts.models import Role, User
 from apps.cart.models import Cart, CartItem
+from apps.catalog import cache as catalog_cache
 from apps.catalog.demo_data import CATEGORIES, PRODUCTS
 from apps.catalog.models import Category, Product
 from apps.orders import checkout, state
@@ -83,6 +84,7 @@ class Command(BaseCommand):
             # in-stock / low-stock / sold-out states regardless of generated history.
             for spec in PRODUCTS:
                 Product.objects.filter(sku=spec["sku"]).update(stock=spec["stock"])
+                catalog_cache.bump_after_commit()
 
         self.stdout.write(
             self.style.SUCCESS(
