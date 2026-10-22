@@ -36,7 +36,7 @@ from apps.accounts.serializers import (
     TokenResponseSerializer,
     UserSerializer,
 )
-from apps.accounts.throttles import AuthRateThrottle
+from apps.accounts.throttles import AuthRateThrottle, RefreshRateThrottle
 from apps.audit import services as audit
 
 INVALID_CREDENTIALS = "Invalid email or password."
@@ -109,7 +109,7 @@ class LoginView(CredentialView):
 
 
 class RefreshView(CredentialView):
-    throttle_classes = [AuthRateThrottle]
+    throttle_classes = [RefreshRateThrottle]
 
     @extend_schema(
         request=None,

@@ -118,6 +118,15 @@ class TestLogin:
             statuses = [login(api, "customer@example.com", "bad").status_code for _ in range(4)]
         assert statuses == [401, 401, 401, 429]
 
+    def test_silent_refresh_does_not_consume_the_login_budget(
+        self, api: APIClient, customer: User
+    ) -> None:
+        # Every page load refreshes the session; that must not lock users out of logging in.
+        with mock.patch.object(AuthRateThrottle, "get_rate", return_value="2/min"):
+            for _ in range(5):
+                refresh(api)
+            assert login(api, "customer@example.com").status_code == 200
+
 
 class TestRefreshRotation:
     def test_requires_csrf_header(self, api: APIClient, customer: User) -> None:

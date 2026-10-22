@@ -141,6 +141,7 @@ REST_FRAMEWORK: dict[str, Any] = {
         "anon": env_str("THROTTLE_ANON", "120/min"),
         "user": env_str("THROTTLE_USER", "600/min"),
         "auth": env_str("THROTTLE_AUTH", "10/min"),
+        "auth_refresh": env_str("THROTTLE_AUTH_REFRESH", "60/min"),
         "checkout": env_str("THROTTLE_CHECKOUT", "20/min"),
     },
     "NUM_PROXIES": env_int("NUM_PROXIES", 0),

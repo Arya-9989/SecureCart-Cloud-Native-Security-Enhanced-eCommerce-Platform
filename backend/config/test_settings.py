@@ -18,6 +18,7 @@ REST_FRAMEWORK = {
         "anon": "10000/min",
         "user": "10000/min",
         "auth": "10000/min",
+        "auth_refresh": "10000/min",
         "checkout": "10000/min",
     },
 }

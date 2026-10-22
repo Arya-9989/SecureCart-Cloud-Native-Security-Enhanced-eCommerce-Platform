@@ -7,6 +7,12 @@ class AuthRateThrottle(AnonRateThrottle):
     scope = "auth"
 
 
+class RefreshRateThrottle(AnonRateThrottle):
+    """Looser per-IP limit for silent token refresh, which runs on every page load."""
+
+    scope = "auth_refresh"
+
+
 class CheckoutRateThrottle(SimpleRateThrottle):
     scope = "checkout"
 

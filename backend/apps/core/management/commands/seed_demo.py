@@ -54,11 +54,11 @@ class Command(BaseCommand):
         parser.add_argument("--admin-email", default="admin@securecart.dev")
         parser.add_argument(
             "--admin-password",
-            default=os.environ.get("DEMO_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD),
+            default=os.environ.get("DEMO_ADMIN_PASSWORD") or DEFAULT_ADMIN_PASSWORD,
         )
         parser.add_argument(
             "--customer-password",
-            default=os.environ.get("DEMO_CUSTOMER_PASSWORD", DEFAULT_CUSTOMER_PASSWORD),
+            default=os.environ.get("DEMO_CUSTOMER_PASSWORD") or DEFAULT_CUSTOMER_PASSWORD,
         )
         parser.add_argument("--orders", type=int, default=48, help="Orders to generate.")
         parser.add_argument("--seed", type=int, default=7, help="Random seed (deterministic).")
