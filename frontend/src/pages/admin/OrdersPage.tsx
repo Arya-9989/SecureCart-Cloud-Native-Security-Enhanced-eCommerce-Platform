@@ -78,14 +78,16 @@ function OrderDrawer({ orderId, onClose }: { orderId: string | null; onClose: ()
         </div>
       ) : (
         <div className="space-y-6">
-          <OrderProgress order={order} />
+          <div className="rounded-[18px] bg-surface-2 p-5">
+            <OrderProgress order={order} />
+          </div>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <h3 className="text-xs font-semibold tracking-wider text-subtle uppercase">Items</h3>
+              <h3 className="text-[12px] font-medium text-muted">Items</h3>
               <ul className="mt-2 space-y-2">
                 {order.items.map((item) => (
                   <li key={item.id} className="flex items-center gap-3 text-sm">
-                    <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2">
+                    <div className="studio size-10 shrink-0 overflow-hidden rounded-[10px]">
                       <ProductImage src={item.image_url} alt="" className="size-full" sizes="sm" />
                     </div>
                     <span className="min-w-0 flex-1 truncate text-fg">
@@ -104,9 +106,7 @@ function OrderDrawer({ orderId, onClose }: { orderId: string | null; onClose: ()
             </div>
             <div className="space-y-4 text-sm">
               <div>
-                <h3 className="text-xs font-semibold tracking-wider text-subtle uppercase">
-                  Ship to
-                </h3>
+                <h3 className="text-[12px] font-medium text-muted">Ship to</h3>
                 <p className="mt-1 text-fg">
                   {order.shipping_address.name}, {order.shipping_address.line1},{" "}
                   {order.shipping_address.city} {order.shipping_address.postal_code},{" "}
@@ -114,23 +114,19 @@ function OrderDrawer({ orderId, onClose }: { orderId: string | null; onClose: ()
                 </p>
               </div>
               <div>
-                <h3 className="text-xs font-semibold tracking-wider text-subtle uppercase">
-                  Payment
-                </h3>
+                <h3 className="text-[12px] font-medium text-muted">Payment</h3>
                 <p className="mt-1 font-mono text-xs break-all text-muted">
                   {order.payment_provider} · {order.payment_reference || "none"}
                 </p>
               </div>
               <div>
-                <h3 className="mb-2 text-xs font-semibold tracking-wider text-subtle uppercase">
-                  History
-                </h3>
+                <h3 className="mb-2 text-[12px] font-medium text-muted">History</h3>
                 <OrderHistoryList order={order} />
               </div>
             </div>
           </div>
           {order.allowed_transitions.length > 0 && (
-            <div className="rounded-2xl border border-line bg-surface-2/60 p-4">
+            <div className="rounded-[18px] border border-line p-5">
               <label htmlFor="transition-note" className="label">
                 Note (optional, e.g. tracking number)
               </label>
@@ -207,7 +203,7 @@ export function AdminOrdersPage() {
         <div
           role="tablist"
           aria-label="Filter by status"
-          className="flex gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1"
+          className="no-scrollbar flex gap-1 overflow-x-auto rounded-full bg-surface-2 p-1"
         >
           {TABS.map((tab) => (
             <button
@@ -219,7 +215,7 @@ export function AdminOrdersPage() {
                 setParam("status", tab.value);
               }}
               className={clsx(
-                "shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition",
+                "shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition-colors",
                 status === tab.value
                   ? "bg-surface text-fg shadow-card"
                   : "text-muted hover:text-fg",
@@ -252,7 +248,7 @@ export function AdminOrdersPage() {
                 <TableMessage colSpan={5}>No orders found.</TableMessage>
               ) : (
                 data?.results.map((order: AdminOrder) => (
-                  <tr key={order.id} className="transition hover:bg-surface-2/50">
+                  <tr key={order.id} className="transition-colors hover:bg-surface-2/60">
                     <Td>
                       <button
                         type="button"

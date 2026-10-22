@@ -4,9 +4,17 @@ import { useEffect, useState, type ReactNode } from "react";
 
 export function DataTable({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm" aria-label={label}>
+    <div className="overflow-hidden rounded-[18px] border border-line bg-surface">
+      {/* The scroll container is bounded so the sticky header stays put on long tables. */}
+      <div
+        className="max-h-[min(70vh,760px)] overflow-auto"
+        // Scrollable regions must be reachable by keyboard (WCAG 2.1.1).
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
+        role="region"
+        aria-label={`${label} table`}
+      >
+        <table className="w-full min-w-[720px] text-left text-[14px]" aria-label={label}>
           {children}
         </table>
       </div>
@@ -19,7 +27,7 @@ export function Th({ children, className }: { children?: ReactNode; className?: 
     <th
       scope="col"
       className={clsx(
-        "border-b border-line bg-surface-2/60 px-4 py-3 text-xs font-semibold tracking-wide text-muted uppercase",
+        "sticky top-0 z-[1] border-b border-line bg-surface-2 px-4 py-3 text-[12px] font-medium text-muted",
         className,
       )}
     >
@@ -35,7 +43,7 @@ export function Td({ children, className }: { children?: ReactNode; className?: 
 export function TableMessage({ colSpan, children }: { colSpan: number; children: ReactNode }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="px-4 py-14 text-center text-sm text-muted">
+      <td colSpan={colSpan} className="px-4 py-16 text-center text-[15px] text-muted">
         {children}
       </td>
     </tr>
@@ -95,7 +103,7 @@ export function SearchInput({
         }}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="field pl-10"
+        className="field h-10 rounded-full pl-10 text-[15px]"
       />
     </div>
   );

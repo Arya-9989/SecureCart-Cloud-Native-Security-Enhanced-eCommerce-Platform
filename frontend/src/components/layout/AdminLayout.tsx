@@ -1,6 +1,5 @@
 import { clsx } from "clsx";
 import {
-  ArrowLeft,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -11,6 +10,7 @@ import {
 } from "lucide-react";
 import { Link, NavLink, Outlet } from "react-router";
 
+import { CommandPalette } from "@/components/admin/CommandPalette";
 import { useAuth } from "@/auth/useAuth";
 import { initials } from "@/lib/format";
 
@@ -28,23 +28,23 @@ const links = [
 export function AdminLayout() {
   const { user, logout } = useAuth();
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[256px_1fr]">
+    <div className="min-h-screen bg-bg lg:grid lg:grid-cols-[240px_1fr]">
       <a
         href="#admin-main"
-        className="sr-only z-50 rounded-lg bg-brand px-4 py-2 font-semibold text-brand-fg focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+        className="sr-only z-50 rounded-full bg-action px-4 py-2 text-[14px] font-medium text-brand-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
       >
         Skip to content
       </a>
-      <aside className="sticky top-0 z-20 border-b border-line bg-surface lg:h-screen lg:border-r lg:border-b-0">
-        <div className="flex h-16 items-center justify-between px-5">
-          <Logo to="/admin" suffix="Admin" />
+      <aside className="z-20 border-b border-line bg-surface-2 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:border-r lg:border-b-0">
+        <div className="flex h-14 items-center justify-between px-5">
+          <Logo to="/admin" suffix="Admin" compact />
           <div className="lg:hidden">
             <ThemeToggle />
           </div>
         </div>
         <nav
           aria-label="Admin"
-          className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0"
+          className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0"
         >
           {links.map(({ to, label, icon: Icon, end }) => (
             <NavLink
@@ -53,39 +53,41 @@ export function AdminLayout() {
               end={end}
               className={({ isActive }) =>
                 clsx(
-                  "flex shrink-0 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition",
+                  "flex shrink-0 items-center gap-3 rounded-[10px] px-3 py-2 text-[14px] transition-colors",
                   isActive
-                    ? "bg-brand-soft text-brand"
-                    : "text-muted hover:bg-surface-2 hover:text-fg",
+                    ? "bg-surface font-medium text-fg shadow-card"
+                    : "text-fg/75 hover:bg-surface-3/60 hover:text-fg",
                 )
               }
             >
-              <Icon className="size-4.5" aria-hidden />
-              {label}
+              {({ isActive }) => (
+                <>
+                  <Icon
+                    className={clsx("size-[18px]", isActive ? "text-brand" : "text-muted")}
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  {label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <div className="absolute inset-x-0 bottom-0 hidden border-t border-line p-4 lg:block">
-          <Link
-            to="/"
-            className="mb-3 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted hover:text-fg"
-          >
-            <ArrowLeft className="size-4" aria-hidden /> Back to store
-          </Link>
-          <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand">
+        <div className="mt-auto hidden p-3 lg:block">
+          <div className="flex items-center gap-3 rounded-[14px] p-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[12px] font-semibold text-fg">
               {initials(user?.full_name ?? "")}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-fg">{user?.full_name}</p>
-              <p className="truncate text-xs text-muted">{user?.email}</p>
+              <p className="truncate text-[14px] font-medium">{user?.full_name}</p>
+              <p className="truncate text-[12px] text-muted">{user?.email}</p>
             </div>
             <button
               type="button"
               onClick={() => {
                 void logout();
               }}
-              className="rounded-lg p-1.5 text-muted hover:bg-surface-3 hover:text-fg"
+              className="flex size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-3 hover:text-fg"
               aria-label="Sign out"
             >
               <LogOut className="size-4" aria-hidden />
@@ -94,16 +96,22 @@ export function AdminLayout() {
         </div>
       </aside>
       <div className="min-w-0">
-        <div className="hidden h-16 items-center justify-end gap-2 border-b border-line bg-surface/70 px-8 backdrop-blur lg:flex">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-fg"
-          >
-            <Store className="size-4" aria-hidden /> View storefront
-          </Link>
-          <ThemeToggle />
+        <div className="glass sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-line/60 px-4 sm:px-6 lg:px-10">
+          <CommandPalette />
+          <div className="ml-auto flex items-center">
+            <Link
+              to="/"
+              className="hit hidden items-center gap-1.5 rounded-full px-3 py-2 text-[14px] text-fg/80 transition-colors hover:text-fg sm:inline-flex"
+            >
+              <Store className="size-4" aria-hidden /> Storefront
+            </Link>
+            <ThemeToggle className="hidden lg:flex" />
+          </div>
         </div>
-        <main id="admin-main" className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main
+          id="admin-main"
+          className="mx-auto max-w-[1280px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10"
+        >
           <Outlet />
         </main>
       </div>
@@ -121,10 +129,12 @@ export function AdminPageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-fg">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+        <h1 className="text-[32px] leading-tight font-semibold tracking-[-0.025em] sm:text-[40px]">
+          {title}
+        </h1>
+        {description && <p className="mt-1.5 text-[17px] text-muted">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>

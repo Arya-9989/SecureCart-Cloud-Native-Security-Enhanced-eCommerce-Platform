@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { ProductFormDialog } from "@/components/admin/ProductFormDialog";
@@ -37,6 +37,22 @@ export function AdminProductsPage() {
   const [editing, setEditing] = useState<AdminProduct | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<AdminProduct | null>(null);
+
+  // "New product" from the command palette arrives as ?new=1.
+  const wantsNew = params.get("new") === "1";
+  useEffect(() => {
+    if (!wantsNew) return;
+    setEditing(null);
+    setFormOpen(true);
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("new");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [wantsNew, setParams]);
 
   const query = {
     search,
@@ -121,7 +137,7 @@ export function AdminProductsPage() {
         </label>
         <select
           id="status-filter"
-          className="field w-full sm:w-44"
+          className="field h-10 w-full rounded-full px-4 text-[15px] sm:w-44"
           value={status}
           onChange={(e) => {
             setParam("status", e.target.value);
@@ -168,10 +184,10 @@ export function AdminProductsPage() {
                 <TableMessage colSpan={6}>No products match these filters.</TableMessage>
               ) : (
                 data?.results.map((product) => (
-                  <tr key={product.id} className="transition hover:bg-surface-2/50">
+                  <tr key={product.id} className="transition-colors hover:bg-surface-2/60">
                     <Td>
                       <div className="flex items-center gap-3">
-                        <div className="size-11 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2">
+                        <div className="studio size-11 shrink-0 overflow-hidden rounded-[10px]">
                           <ProductImage
                             src={product.image_url}
                             alt=""
@@ -230,7 +246,7 @@ export function AdminProductsPage() {
                       <div className="inline-flex gap-1">
                         <button
                           type="button"
-                          className="rounded-lg p-2 text-muted transition hover:bg-surface-3 hover:text-fg"
+                          className="flex size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-3 hover:text-fg"
                           aria-label={`Edit ${product.name}`}
                           onClick={() => {
                             setEditing(product);
@@ -241,7 +257,7 @@ export function AdminProductsPage() {
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg p-2 text-muted transition hover:bg-danger-soft hover:text-danger"
+                          className="flex size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-danger-soft hover:text-danger"
                           aria-label={`Delete ${product.name}`}
                           onClick={() => {
                             setDeleting(product);

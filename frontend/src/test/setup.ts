@@ -34,6 +34,8 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 window.scrollTo = vi.fn();
+// cmdk keeps the active item in view.
+Element.prototype.scrollIntoView = vi.fn();
 
 // React Router's data router builds `new Request(url, { signal })` with jsdom's AbortSignal,
 // which Node's undici-based Request rejects. Tests never abort navigations, so drop it.
