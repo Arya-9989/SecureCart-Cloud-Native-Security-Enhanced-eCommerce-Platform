@@ -99,7 +99,8 @@ export function AdminLayout() {
         </div>
       </aside>
       <div className="min-w-0">
-        <div className="glass sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-line/60 px-4 sm:px-6 lg:px-10">
+        {/* The page's banner landmark, so its controls are not outside every region. */}
+        <header className="glass sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-line/60 px-4 sm:px-6 lg:px-10">
           <CommandPalette />
           <div className="ml-auto flex items-center">
             <Link
@@ -110,7 +111,7 @@ export function AdminLayout() {
             </Link>
             <ThemeToggle className="hidden lg:flex" />
           </div>
-        </div>
+        </header>
         <main
           id="admin-main"
           className="mx-auto max-w-[1280px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10"
