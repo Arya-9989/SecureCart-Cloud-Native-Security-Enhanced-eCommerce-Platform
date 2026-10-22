@@ -8,10 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { Pagination } from "@/components/ui/misc";
 import { useCategories, useProducts } from "@/hooks/queries";
+import { SHOP_PAGE_SIZE, shopQuery } from "@/lib/catalogQueries";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import type { ProductQuery } from "@/lib/endpoints";
-
-const PAGE_SIZE = 12;
 
 function titleFromSlug(slug: string): string {
   return slug
@@ -31,17 +30,7 @@ const SORTS = [
 
 function useFilters() {
   const [params, setParams] = useSearchParams();
-  const query: ProductQuery = {
-    search: params.get("search") ?? undefined,
-    category: params.get("category") ?? undefined,
-    min_price: params.get("min_price") ?? undefined,
-    max_price: params.get("max_price") ?? undefined,
-    in_stock: params.get("in_stock") === "true" ? true : undefined,
-    featured: params.get("featured") === "true" ? true : undefined,
-    ordering: params.get("ordering") ?? undefined,
-    page: Number(params.get("page") ?? "1") || 1,
-    page_size: PAGE_SIZE,
-  };
+  const query = shopQuery(params);
   const update = (changes: Record<string, string | null>) => {
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -348,7 +337,7 @@ export function ShopPage() {
               {data && (
                 <Pagination
                   page={query.page ?? 1}
-                  pageSize={PAGE_SIZE}
+                  pageSize={SHOP_PAGE_SIZE}
                   count={data.count}
                   onPage={(page) => {
                     update({ page: String(page) });

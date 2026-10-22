@@ -1,10 +1,12 @@
 /// <reference types="vitest/config" />
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+import { prerenderedFile } from "./src/prerender/routing";
 
 const apiTarget = process.env.VITE_DEV_API_PROXY ?? "http://localhost:8000";
 const devPort = Number(process.env.VITE_PORT ?? "5173");
@@ -33,8 +35,29 @@ function nginxSecurityHeaders(): Record<string, string> {
   return headers;
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+/**
+ * `vite preview` answers the prerendered public pages (dist/_prerender, written by
+ * scripts/prerender.mjs) on their own URLs, exactly as nginx's try_files does in production,
+ * and falls back to the SPA shell for everything else.
+ */
+function prerenderedPages(): Plugin {
+  const dir = fileURLToPath(new URL("./dist/_prerender/", import.meta.url));
+  return {
+    name: "securecart-prerendered-pages",
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        const file = prerenderedFile(url.pathname, url.search);
+        if (file && existsSync(dir + file)) req.url = `/_prerender/${file}`;
+        next();
+      });
+    },
+  };
+}
+
+export default defineConfig(({ isSsrBuild }) => ({
+  plugins: [react(), tailwindcss(), prerenderedPages()],
+  define: { __BUILD_YEAR__: JSON.stringify(new Date().getFullYear()) },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
@@ -42,6 +65,8 @@ export default defineConfig({
   preview: { port: previewPort, strictPort: true, proxy, headers: nginxSecurityHeaders() },
   build: {
     sourcemap: false,
+    // The prerender bundle (src/entry-server.tsx) runs once in Node at build time.
+    copyPublicDir: !isSsrBuild,
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
@@ -79,4 +104,4 @@ export default defineConfig({
       exclude: ["src/test/**", "src/main.tsx", "src/**/*.d.ts"],
     },
   },
-});
+}));

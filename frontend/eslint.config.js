@@ -6,7 +6,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "coverage", "node_modules"] },
+  { ignores: ["dist", ".ssr", "coverage", "node_modules"] },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
@@ -39,8 +39,8 @@ export default tseslint.config(
     },
   },
   {
-    // Route table: module-level JSX is intentional and not hot-reloaded.
-    files: ["src/routes.tsx"],
+    // Route table and the build-time prerender entry: never hot-reloaded.
+    files: ["src/routes.tsx", "src/entry-server.tsx"],
     rules: { "react-refresh/only-export-components": "off" },
   },
   {

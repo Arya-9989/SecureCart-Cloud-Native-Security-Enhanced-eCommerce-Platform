@@ -15,6 +15,7 @@ backend/staticfiles/
 # Node
 node_modules/
 frontend/dist/
+frontend/.ssr/
 frontend/coverage/
 frontend/test-results/
 frontend/playwright-report/

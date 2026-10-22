@@ -56,11 +56,18 @@ export interface ProductQuery extends Query {
   page_size?: number;
 }
 
+/** API paths of the public catalog reads (also the keys of the prerender snapshot). */
+export const catalogPaths = {
+  products: (params: ProductQuery = {}) => `/products/${toQuery(params)}`,
+  product: (slug: string) => `/products/${encodeURIComponent(slug)}/`,
+  categories: "/categories/",
+};
+
 export const catalogApi = {
   products: (params: ProductQuery = {}, signal?: AbortSignal) =>
-    apiFetch<Paginated<Product>>(`/products/${toQuery(params)}`, { signal }),
-  product: (slug: string) => apiFetch<Product>(`/products/${encodeURIComponent(slug)}/`),
-  categories: () => apiFetch<Category[]>("/categories/"),
+    apiFetch<Paginated<Product>>(catalogPaths.products(params), { signal }),
+  product: (slug: string) => apiFetch<Product>(catalogPaths.product(slug)),
+  categories: () => apiFetch<Category[]>(catalogPaths.categories),
 };
 
 export const cartApi = {

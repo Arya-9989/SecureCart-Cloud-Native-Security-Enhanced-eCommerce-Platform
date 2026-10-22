@@ -8,3 +8,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Year of the build (vite.config.ts), so prerendered HTML and the hydrating app agree. */
+declare const __BUILD_YEAR__: number;

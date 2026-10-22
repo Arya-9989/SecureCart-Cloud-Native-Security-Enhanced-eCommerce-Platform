@@ -22,7 +22,8 @@ function readPreference(): ThemePreference {
 }
 
 function systemPrefersDark(): boolean {
-  return typeof window.matchMedia === "function"
+  // Also runs during the build-time prerender, where there is no window.
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-color-scheme: dark)").matches
     : false;
 }
