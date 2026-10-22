@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from unittest import mock
 
 import pytest
 from rest_framework.test import APIClient
@@ -8,6 +9,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.cart.models import CartItem
 from apps.catalog.models import Product
+from apps.orders import checkout as checkout_service
 from apps.orders.models import Order, OrderStatus
 from apps.payments.providers.mock import DECLINE_TOKEN
 from tests.conftest import ADDRESS, add_to_cart, checkout
@@ -76,6 +78,50 @@ class TestIdempotency:
         assert Order.objects.count() == 1
         product.refresh_from_db()
         assert product.stock == 9
+
+    def test_replaying_a_declined_attempt_repeats_the_decline(
+        self, customer_api: APIClient, customer: User, product: Product
+    ) -> None:
+        # A retry after a lost response must see what the first attempt got, not a 200.
+        add_to_cart(customer, product, 1)
+        first = checkout(customer_api, key="declined-0001", token=DECLINE_TOKEN)
+        again = checkout(customer_api, key="declined-0001", token=DECLINE_TOKEN)
+        assert first.status_code == again.status_code == 402
+        assert again.data["error"]["code"] == "payment_declined"
+        assert again.data["error"]["order_id"] == first.data["error"]["order_id"]
+        assert Order.objects.count() == 1
+
+    def test_same_key_racing_an_in_flight_attempt_gets_that_order(
+        self, customer: User, make_product
+    ) -> None:
+        # Request A has reserved the last unit and is waiting on the payment provider. Request
+        # B, a retry with the same key, looked for an existing order just before A committed.
+        # B must be answered with A's order, not told the item is out of stock.
+        last_unit = make_product(stock=1)
+        add_to_cart(customer, last_unit, 1)
+        address = checkout_service.ShippingAddress("A", "1 Road", "City", "12345", "US")
+        in_flight = checkout_service._reserve(customer, address, "race-key-0001")
+
+        real_lookup = checkout_service.find_attempt
+        looks: list[str] = []
+
+        def lookup(user: User, key: str) -> Order | None:
+            looks.append(key)
+            # B's first look happened before A committed, so it saw nothing.
+            return None if len(looks) == 1 else real_lookup(user, key)
+
+        with mock.patch.object(checkout_service, "find_attempt", side_effect=lookup):
+            result = checkout_service.place_order(
+                customer,
+                address=address,
+                payment_token="tok_mock_approve",
+                idempotency_key="race-key-0001",
+            )
+        assert result.replayed
+        assert result.order.pk == in_flight.pk
+        last_unit.refresh_from_db()
+        assert last_unit.stock == 0
+        assert Order.objects.count() == 1
 
     def test_same_key_from_different_users_is_independent(
         self, customer_api, other_api, customer, other_customer, product

@@ -9,6 +9,11 @@ backstop.
 The payment call happens *after* the reservation transaction commits, so row locks are never
 held across a network call. If the charge is declined the order moves to ``payment_failed``
 and the reserved stock is released.
+
+Idempotency: an attempt is identified by (user, ``Idempotency-Key``). Retries are answered
+with the order the first attempt created. A retry can race the first attempt (a double
+click, or a client retrying a slow request), so reservations are serialised per shopper by
+locking their cart row, and the key is checked again once that lock is held.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 
 from apps.accounts.models import User
-from apps.cart.models import CartItem
+from apps.cart.models import Cart, CartItem
 from apps.catalog.models import Product
 from apps.orders import state
 from apps.orders.models import Order, OrderEvent, OrderItem, OrderStatus
@@ -71,6 +76,17 @@ class CheckoutResult:
     replayed: bool
 
 
+class _AlreadyPlaced(Exception):
+    def __init__(self, order: Order) -> None:
+        super().__init__(order.number)
+        self.order = order
+
+
+def find_attempt(user: User, idempotency_key: str) -> Order | None:
+    """The order created by an earlier attempt with this key, if any."""
+    return Order.objects.filter(user=user, idempotency_key=idempotency_key).first()
+
+
 def place_order(
     user: User,
     *,
@@ -78,15 +94,18 @@ def place_order(
     payment_token: str,
     idempotency_key: str,
 ) -> CheckoutResult:
-    existing = Order.objects.filter(user=user, idempotency_key=idempotency_key).first()
+    existing = find_attempt(user, idempotency_key)
     if existing is not None:
         return CheckoutResult(existing, replayed=True)
 
     try:
         order = _reserve(user, address, idempotency_key)
+    except _AlreadyPlaced as replay:
+        # A concurrent attempt with the same key committed while this one waited.
+        return CheckoutResult(replay.order, replayed=True)
     except IntegrityError:
-        # A concurrent request with the same idempotency key won the race.
-        winner = Order.objects.filter(user=user, idempotency_key=idempotency_key).first()
+        # Backstop: the (user, idempotency_key) unique constraint.
+        winner = find_attempt(user, idempotency_key)
         if winner is None:
             raise
         return CheckoutResult(winner, replayed=True)
@@ -128,6 +147,14 @@ def place_order(
 
 @transaction.atomic
 def _reserve(user: User, address: ShippingAddress, idempotency_key: str) -> Order:
+    # One reservation at a time per shopper (lock order: cart row, then products by pk).
+    # An attempt that waited here re-checks its key, so it can never reserve twice or report
+    # "out of stock" for units its own earlier attempt is holding.
+    list(Cart.objects.select_for_update().filter(user=user))
+    existing = find_attempt(user, idempotency_key)
+    if existing is not None:
+        raise _AlreadyPlaced(existing)
+
     cart_items = list(
         CartItem.objects.filter(cart__user=user).select_related("product").order_by("product_id")
     )

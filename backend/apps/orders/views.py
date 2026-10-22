@@ -67,7 +67,10 @@ class CheckoutView(APIView):
         responses={
             201: OrderSerializer,
             200: OpenApiResponse(OrderSerializer, description="Idempotent replay"),
-            402: OpenApiResponse(description="Payment declined; stock released"),
+            402: OpenApiResponse(
+                description="Payment declined; stock released (also returned when replaying "
+                "a declined attempt's key)"
+            ),
             409: OpenApiResponse(description="Insufficient stock or empty cart"),
         },
         tags=["orders"],
@@ -96,6 +99,14 @@ class CheckoutView(APIView):
         except checkout.CheckoutError as exc:
             return _error(exc.code, exc.message, status.HTTP_409_CONFLICT, items=exc.details)
 
+        if result.replayed and result.order.status == OrderStatus.PAYMENT_FAILED:
+            # A retry of a declined attempt gets the answer the first attempt got.
+            return _error(
+                checkout.PaymentDeclined.code,
+                result.order.failure_reason or "Payment was declined.",
+                status.HTTP_402_PAYMENT_REQUIRED,
+                order_id=str(result.order.pk),
+            )
         order = _detail_queryset().get(pk=result.order.pk)
         return Response(
             OrderSerializer(order).data,

@@ -105,6 +105,42 @@ def _race(workers: int, work: Callable[[], object]) -> list[object]:
 
 @pytest.mark.postgres
 @pytest.mark.django_db(transaction=True)
+def test_parallel_retries_with_one_key_place_one_order() -> None:
+    """A double-click (or a retry storm) for the last unit: one order, the same answer for all."""
+    if connection.vendor != "postgresql":
+        pytest.skip("SELECT ... FOR UPDATE semantics require PostgreSQL")
+    category = Category.objects.create(name="Limited", slug="limited")
+    product = Product.objects.create(
+        name="Last One",
+        slug="last-one",
+        sku="LST-1",
+        category=category,
+        price=Decimal("10.00"),
+        stock=1,
+    )
+    user = User.objects.create_user("retry@example.com", "x" * 12, full_name="R")
+    CartItem.objects.create(cart=Cart.objects.create(user=user), product=product, quantity=1)
+
+    outcomes = _race(
+        6,
+        lambda: checkout.place_order(
+            user,
+            address=checkout.ShippingAddress("R", "1 Main St", "Town", "12345", "US"),
+            payment_token=APPROVE_TOKEN,
+            idempotency_key="one-key-for-all",
+        ),
+    )
+    assert all(isinstance(o, checkout.CheckoutResult) for o in outcomes), outcomes
+    results = [o for o in outcomes if isinstance(o, checkout.CheckoutResult)]
+    assert len({r.order.pk for r in results}) == 1
+    assert sum(not r.replayed for r in results) == 1
+    product.refresh_from_db()
+    assert product.stock == 0
+    assert Order.objects.count() == 1
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
 def test_parallel_refreshes_with_one_token_never_both_succeed() -> None:
     """Racing the legitimate client with a stolen token must not mint two live sessions."""
     if connection.vendor != "postgresql":
