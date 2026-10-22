@@ -5,7 +5,9 @@ import { useAuth } from "@/auth/useAuth";
 import { useToast } from "@/components/ui/Toast";
 import { errorMessage } from "@/lib/api";
 import { cartApi, catalogApi, orderApi, type ProductQuery } from "@/lib/endpoints";
-import type { Cart } from "@/lib/types";
+import { announceBagAdd } from "@/lib/bagCue";
+import type { Cart, Product } from "@/lib/types";
+import { isUnconfirmed } from "@/prerender/snapshot";
 
 export const keys = {
   categories: ["catalog", "categories"] as const,
@@ -59,29 +61,48 @@ function useCartMutation<TVars>(mutationFn: (vars: TVars) => Promise<Cart>) {
   });
 }
 
-/** Adds to the bag, or sends anonymous shoppers to sign in and come back. */
+type BagProduct = Pick<Product, "id" | "slug" | "name">;
+
+/**
+ * Adds to the bag, or sends anonymous shoppers to sign in and come back. `onAdded` lets the
+ * pressed button acknowledge the add itself; the nav's bag icon is told through `bagCue`.
+ */
 export function useAddToCart() {
   const { status } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const mutation = useCartMutation(
-    ({ productId, quantity }: { productId: number; quantity: number; name: string }) =>
-      cartApi.add(productId, quantity),
+    async ({ product, quantity }: { product: BagProduct; quantity: number }) => {
+      // A product still showing build-time data is confirmed live before it is added.
+      const id = isUnconfirmed(product)
+        ? (
+            await queryClient.query({
+              queryKey: keys.product(product.slug),
+              queryFn: () => catalogApi.product(product.slug),
+              staleTime: 0,
+            })
+          ).id
+        : product.id;
+      return cartApi.add(id, quantity);
+    },
   );
   return {
     ...mutation,
-    add: (productId: number, quantity: number, name: string) => {
+    add: (product: BagProduct, quantity: number, options: { onAdded?: () => void } = {}) => {
       if (status !== "authenticated") {
         toast.show("info", "Sign in to add to your bag", "Your bag is saved to your account.");
         void navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
         return;
       }
       mutation.mutate(
-        { productId, quantity, name },
+        { product, quantity },
         {
           onSuccess: () => {
-            toast.success("Added to bag", `${quantity} Ã— ${name}`);
+            toast.success("Added to bag", `${quantity} × ${product.name}`);
+            announceBagAdd();
+            options.onAdded?.();
           },
         },
       );

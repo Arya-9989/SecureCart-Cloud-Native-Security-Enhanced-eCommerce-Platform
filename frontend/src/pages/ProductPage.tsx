@@ -1,16 +1,19 @@
 import { clsx } from "clsx";
-import { Lock, PackageX, RefreshCcw, Truck } from "lucide-react";
+import { Check, Lock, PackageX, RefreshCcw, Truck } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useParams } from "react-router";
 
 import { Shelf, ShelfItem } from "@/components/store/Shelf";
+import { useProductLink } from "@/components/store/useProductLink";
 import { Button } from "@/components/ui/Button";
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, QuantityStepper, Skeleton, StockBadge } from "@/components/ui/misc";
 import { Reveal } from "@/components/ui/Reveal";
 import { useAddToCart, useProduct, useProducts } from "@/hooks/queries";
+import { useAddedFlash } from "@/hooks/useAddedFlash";
 import { ApiError } from "@/lib/api";
+import { relatedQuery } from "@/lib/catalogQueries";
 import { NoIndex } from "@/lib/NoIndex";
 import { formatMoney } from "@/lib/format";
 import { FLAT_SHIPPING_FEE, FREE_SHIPPING_FROM, STORE_RULES } from "@/lib/storeRules";
@@ -36,7 +39,12 @@ function Gallery({ product }: { product: Product }) {
   };
   return (
     <div>
-      <div className="studio relative aspect-[4/3] overflow-hidden rounded-[28px]">
+      {/* The view-transition target for P7: a pressed product card morphs into this box. */}
+      <div
+        className="studio relative aspect-[4/3] overflow-hidden rounded-[28px]"
+        data-vt="product-art"
+        data-product-gallery=""
+      >
         {/* Both views stay mounted and cross-fade (opacity only, 320ms, Apple's ease). */}
         {VIEWS.map((v, i) => (
           <div
@@ -140,6 +148,7 @@ function PurchasePanel({
 }) {
   const [quantity, setQuantity] = useState(1);
   const { add, isPending } = useAddToCart();
+  const [added, flashAdded] = useAddedFlash();
   const max = Math.max(1, Math.min(product.stock, maxPerLine));
   const soldOut = product.stock <= 0;
 
@@ -186,11 +195,12 @@ function PurchasePanel({
           className="min-w-44 flex-1 sm:flex-none"
           disabled={soldOut}
           loading={isPending}
+          icon={added ? <AddedIcon /> : undefined}
           onClick={() => {
-            add(product.id, quantity, product.name);
+            add(product, quantity, { onAdded: flashAdded });
           }}
         >
-          {soldOut ? "Sold out" : "Add to Bag"}
+          {soldOut ? "Sold out" : added ? "Added" : "Add to Bag"}
         </Button>
       </div>
       {!soldOut && product.stock <= 5 && (
@@ -223,6 +233,7 @@ function StickyBuyBar({
 }) {
   const [visible, setVisible] = useState(false);
   const { add, isPending } = useAddToCart();
+  const [added, flashAdded] = useAddedFlash();
   const soldOut = product.stock <= 0;
 
   useEffect(() => {
@@ -242,9 +253,13 @@ function StickyBuyBar({
 
   return (
     <div
+      // Out of view it is display:none, not just transparent, so no invisible text lingers;
+      // it slides in from @starting-style and slides out before display flips (discrete).
       className={clsx(
-        "glass fixed inset-x-0 top-12 z-30 border-b border-line/60 transition-[opacity,transform] duration-[240ms] ease-(--ease-apple)",
-        visible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-3 opacity-0",
+        "glass fixed inset-x-0 top-12 z-30 border-b border-line/60 transition-[opacity,transform,display] transition-discrete duration-[240ms] ease-(--ease-apple)",
+        visible
+          ? "block translate-y-0 opacity-100 starting:-translate-y-3 starting:opacity-0"
+          : "pointer-events-none hidden -translate-y-3 opacity-0",
       )}
       // Hidden from assistive tech and the tab order until it slides in.
       inert={!visible}
@@ -262,15 +277,20 @@ function StickyBuyBar({
           className="ml-auto sm:ml-0"
           disabled={soldOut}
           loading={isPending}
+          icon={added ? <AddedIcon /> : undefined}
           onClick={() => {
-            add(product.id, 1, product.name);
+            add(product, 1, { onAdded: flashAdded });
           }}
         >
-          {soldOut ? "Sold out" : "Add to Bag"}
+          {soldOut ? "Sold out" : added ? "Added" : "Add to Bag"}
         </Button>
       </div>
     </div>
   );
+}
+
+function AddedIcon() {
+  return <Check className="size-4 animate-pop-in" strokeWidth={2.5} aria-hidden />;
 }
 
 function availability(stock: number): string {
@@ -361,8 +381,31 @@ function Compare({ product, others }: { product: Product; others: Product[] }) {
   );
 }
 
+function RelatedCard({ product }: { product: Product }) {
+  const { art, linkProps } = useProductLink(product);
+  return (
+    <Link
+      to={`/products/${product.slug}`}
+      {...linkProps}
+      className="studio group block rounded-[24px] p-5"
+    >
+      <div ref={art}>
+        <ProductImage
+          src={product.image_url}
+          alt=""
+          className="aspect-[4/3] w-full transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.04]"
+        />
+      </div>
+      <span className="mt-3 block text-[17px] font-semibold tracking-[-0.015em]">
+        {product.name}
+      </span>
+      <span className="text-[15px] text-muted tabular-nums">{formatMoney(product.price)}</span>
+    </Link>
+  );
+}
+
 function Related({ product }: { product: Product }) {
-  const { data, isLoading } = useProducts({ category: product.category.slug, page_size: 12 });
+  const { data, isLoading } = useProducts(relatedQuery(product.category.slug));
   const others = data?.results.filter((p) => p.id !== product.id) ?? [];
   if (isLoading) {
     return (
@@ -387,19 +430,7 @@ function Related({ product }: { product: Product }) {
           <Shelf label={`More in ${product.category.name}`}>
             {others.map((p) => (
               <ShelfItem key={p.id} className="w-[70vw] max-w-[280px] sm:w-[280px]">
-                <Link to={`/products/${p.slug}`} className="studio group block rounded-[24px] p-5">
-                  <ProductImage
-                    src={p.image_url}
-                    alt=""
-                    className="aspect-[4/3] w-full transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.04]"
-                  />
-                  <span className="mt-3 block text-[17px] font-semibold tracking-[-0.015em]">
-                    {p.name}
-                  </span>
-                  <span className="text-[15px] text-muted tabular-nums">
-                    {formatMoney(p.price)}
-                  </span>
-                </Link>
+                <RelatedCard product={p} />
               </ShelfItem>
             ))}
           </Shelf>
@@ -446,7 +477,7 @@ export function ProductPage() {
             {isLoading || !product ? (
               <Skeleton className="aspect-[4/3] rounded-[28px]" />
             ) : (
-              <Gallery product={product} />
+              <Gallery key={product.id} product={product} />
             )}
           </div>
           {isLoading || !product ? (

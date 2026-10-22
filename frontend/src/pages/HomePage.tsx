@@ -4,18 +4,50 @@ import { useEffect } from "react";
 import { Link } from "react-router";
 
 import { Shelf, ShelfItem } from "@/components/store/Shelf";
+import { useProductLink } from "@/components/store/useProductLink";
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, Skeleton } from "@/components/ui/misc";
 import { Reveal } from "@/components/ui/Reveal";
 import { useCategories, useProducts } from "@/hooks/queries";
+import { HOME_CATALOG_QUERY } from "@/lib/catalogQueries";
 import { formatMoney } from "@/lib/format";
 import { PROTECTIONS } from "@/lib/protection";
 import { FLAT_SHIPPING_FEE, FREE_SHIPPING_FROM } from "@/lib/storeRules";
 import type { Category, Product } from "@/lib/types";
+import { HOME_TITLE } from "@/lib/useDocumentTitle";
 
-// One request feeds the whole page: the catalog is small (the API caps a page at 100).
-const CATALOG_QUERY = { page_size: 100 };
+/** Scroll depth for the trio (see .hero-depth-* in index.css): the lead steps forward. */
+const DEPTH = ["hero-depth-left", "hero-depth-lead", "hero-depth-right"] as const;
+
+function HeroProduct({ product, index }: { product: Product; index: number }) {
+  const { art, linkProps } = useProductLink(product);
+  return (
+    <Link
+      to={`/products/${product.slug}`}
+      {...linkProps}
+      className={clsx(
+        "group block origin-bottom rounded-[28px] text-center",
+        // Phones show the lead product alone and large; wider screens a trio.
+        index === 1
+          ? "z-10 mx-auto w-[92%] scale-[1.12] sm:w-auto sm:scale-[1.38]"
+          : "hidden scale-[1.08] sm:block",
+      )}
+    >
+      <div ref={art} className={DEPTH[index]}>
+        <ProductImage
+          src={product.image_url}
+          alt={product.name}
+          eager
+          className="aspect-[4/3] w-full transition-transform duration-500 ease-(--ease-apple) group-hover:-translate-y-1"
+        />
+      </div>
+      <span className="sr-only">
+        {product.name}, {formatMoney(product.price)}
+      </span>
+    </Link>
+  );
+}
 
 function Hero({ featured, loading }: { featured: Product[]; loading: boolean }) {
   const trio = featured.slice(0, 3);
@@ -53,29 +85,7 @@ function Hero({ featured, loading }: { featured: Product[]; loading: boolean }) 
               />
             ))
           : ordered.map((product, index) =>
-              product ? (
-                <Link
-                  key={product.id}
-                  to={`/products/${product.slug}`}
-                  className={clsx(
-                    "group block origin-bottom rounded-[28px] text-center",
-                    // Phones show the lead product alone and large; wider screens a trio.
-                    index === 1
-                      ? "z-10 mx-auto w-[92%] scale-[1.12] sm:w-auto sm:scale-[1.38]"
-                      : "hidden scale-[1.08] sm:block",
-                  )}
-                >
-                  <ProductImage
-                    src={product.image_url}
-                    alt={product.name}
-                    eager
-                    className="aspect-[4/3] w-full transition-transform duration-500 ease-(--ease-apple) group-hover:-translate-y-1"
-                  />
-                  <span className="sr-only">
-                    {product.name}, {formatMoney(product.price)}
-                  </span>
-                </Link>
-              ) : null,
+              product ? <HeroProduct key={product.id} product={product} index={index} /> : null,
             )}
       </div>
       <div className="h-12 sm:h-20" aria-hidden />
@@ -179,6 +189,35 @@ function CategoryTiles({ categories, products }: { categories: Category[]; produ
   );
 }
 
+function LatestCard({ product }: { product: Product }) {
+  const { art, linkProps } = useProductLink(product);
+  return (
+    <Link
+      to={`/products/${product.slug}`}
+      {...linkProps}
+      className="group flex h-[440px] flex-col rounded-[24px] bg-surface p-7 shadow-card transition-shadow duration-300 hover:shadow-lift"
+    >
+      <p className="text-[13px] font-medium text-muted">{product.category.name}</p>
+      <h3 className="mt-1 text-[24px] leading-tight font-semibold tracking-[-0.02em]">
+        {product.name}
+      </h3>
+      <p className="mt-2 text-[15px] text-fg tabular-nums">
+        {formatMoney(product.price)}
+        {product.stock > 0 && product.stock <= 5 && (
+          <span className="ml-2 font-medium text-warning">Only {product.stock} left</span>
+        )}
+      </p>
+      <div ref={art} className="mt-auto">
+        <ProductImage
+          src={product.image_url}
+          alt=""
+          className="aspect-[4/3] w-full scale-[1.15] transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.2]"
+        />
+      </div>
+    </Link>
+  );
+}
+
 function Latest({ products }: { products: Product[] }) {
   const latest = [...products].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8);
   return (
@@ -192,28 +231,7 @@ function Latest({ products }: { products: Product[] }) {
         <Shelf label="Latest products">
           {latest.map((product) => (
             <ShelfItem key={product.id} className="w-[78vw] max-w-[340px] sm:w-[340px]">
-              <Link
-                to={`/products/${product.slug}`}
-                className="group flex h-[440px] flex-col rounded-[24px] bg-surface p-7 shadow-card transition-shadow duration-300 hover:shadow-lift"
-              >
-                <p className="text-[13px] font-medium text-muted">{product.category.name}</p>
-                <h3 className="mt-1 text-[24px] leading-tight font-semibold tracking-[-0.02em]">
-                  {product.name}
-                </h3>
-                <p className="mt-2 text-[15px] text-fg tabular-nums">
-                  {formatMoney(product.price)}
-                  {product.stock > 0 && product.stock <= 5 && (
-                    <span className="ml-2 font-medium text-warning">Only {product.stock} left</span>
-                  )}
-                </p>
-                <div className="mt-auto">
-                  <ProductImage
-                    src={product.image_url}
-                    alt=""
-                    className="aspect-[4/3] w-full scale-[1.15] transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.2]"
-                  />
-                </div>
-              </Link>
+              <LatestCard product={product} />
             </ShelfItem>
           ))}
         </Shelf>
@@ -277,13 +295,13 @@ function HomeSkeleton() {
 }
 
 export function HomePage() {
-  const { data, isLoading, error, refetch } = useProducts(CATALOG_QUERY);
+  const { data, isLoading, error, refetch } = useProducts(HOME_CATALOG_QUERY);
   const { data: categories } = useCategories();
   const products = data?.results ?? [];
   const featured = products.filter((p) => p.is_featured);
 
   useEffect(() => {
-    document.title = "SecureCart: everyday essentials, bought safely";
+    document.title = HOME_TITLE;
   }, []);
 
   return (

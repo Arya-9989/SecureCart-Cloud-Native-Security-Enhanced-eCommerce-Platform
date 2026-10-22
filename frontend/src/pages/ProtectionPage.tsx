@@ -1,10 +1,11 @@
 import { clsx } from "clsx";
-import { ArrowDown, Check, CircleSlash, Code2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ArrowDown, Check, CircleSlash, Code2, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { Reveal } from "@/components/ui/Reveal";
+import { interpolate, useScrollScrub } from "@/hooks/useScrollScrub";
 import { PROTECTIONS, protection, type Protection } from "@/lib/protection";
 import { STORE_RULES } from "@/lib/storeRules";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
@@ -15,9 +16,15 @@ const REPO =
 /** GitHub URL for a source path: files open as blobs, folders as trees. */
 const sourceUrl = (path: string) => `${REPO}/${/\.\w+$/.test(path) ? "blob" : "tree"}/main/${path}`;
 
-/** Sticky local nav (Apple product-page pattern) with the active section underlined. */
+/**
+ * Sticky local nav (Apple product-page pattern). P4: one underline marks the section in view
+ * and slides between links as you scroll (transform only; instant with reduced motion).
+ */
 function LocalNav() {
   const [active, setActive] = useState<string | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const [mark, setMark] = useState<{ x: number; width: number } | null>(null);
+
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(
@@ -37,12 +44,31 @@ function LocalNav() {
     };
   }, []);
 
+  useEffect(() => {
+    const container = bar.current;
+    const measure = () => {
+      const link = active ? container?.querySelector(`a[href="#${active}"]`) : null;
+      if (!container || !link || link.getClientRects().length === 0) {
+        setMark(null);
+        return;
+      }
+      const from = container.getBoundingClientRect();
+      const to = link.getBoundingClientRect();
+      setMark({ x: to.left - from.left, width: to.width });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+    };
+  }, [active]);
+
   return (
     <nav
       aria-label="Protection sections"
       className="glass sticky top-12 z-30 border-b border-line/60"
     >
-      <div className="container-page flex h-[52px] items-center gap-6">
+      <div ref={bar} className="container-page relative flex h-[52px] items-center gap-6">
         <a href="#top" className="shrink-0 text-[19px] font-semibold tracking-[-0.02em] text-fg">
           Protection
         </a>
@@ -54,9 +80,7 @@ function LocalNav() {
                 aria-current={active === p.id ? "location" : undefined}
                 className={clsx(
                   "hit relative inline-block py-1 text-[12px] whitespace-nowrap transition-colors",
-                  active === p.id
-                    ? "text-fg after:absolute after:inset-x-0 after:-bottom-[15px] after:h-px after:bg-fg"
-                    : "text-fg/80 hover:text-fg",
+                  active === p.id ? "text-fg" : "text-fg/80 hover:text-fg",
                 )}
               >
                 {p.stage}
@@ -64,11 +88,173 @@ function LocalNav() {
             </li>
           ))}
         </ul>
+        <span
+          className={clsx(
+            "absolute bottom-[-1px] left-0 h-px w-px origin-left bg-fg transition-[transform,opacity] duration-[320ms] ease-(--ease-apple)",
+            mark ? "opacity-100" : "opacity-0",
+          )}
+          style={
+            mark
+              ? { transform: `translateX(${String(mark.x)}px) scaleX(${String(mark.width)})` }
+              : undefined
+          }
+          aria-hidden
+        />
         <Link to="/shop" className={buttonClasses("primary", "sm", "ml-auto md:ml-0")}>
           Shop
         </Link>
       </div>
     </nav>
+  );
+}
+
+/*
+ * Scripted fallback for the four-moments story. It mirrors the CSS keyframes (moment-1..4,
+ * lit-2..4 and rail-fill in index.css), so browsers without scroll timelines get the same
+ * scrubbed story. Progress runs from 0 to 1 while the stage is pinned.
+ */
+type Stops = readonly (readonly [number, number])[];
+const PANEL_OPACITY: Stops[] = [
+  [
+    [0.21, 1],
+    [0.245, 0],
+  ],
+  [
+    [0.245, 0],
+    [0.28, 1],
+    [0.46, 1],
+    [0.495, 0],
+  ],
+  [
+    [0.495, 0],
+    [0.53, 1],
+    [0.71, 1],
+    [0.745, 0],
+  ],
+  [
+    [0.745, 0],
+    [0.78, 1],
+  ],
+];
+const LIT_FROM = [0, 0.22, 0.47, 0.72];
+
+/** The one mechanism each moment rests on, as it appears in the code. */
+const PROOF: Record<Protection["id"], string> = {
+  "sign-in": "HttpOnly · Secure · SameSite=Strict",
+  bag: `min(stock on hand, ${String(STORE_RULES.maxPerLine)})`,
+  checkout: "SELECT … FOR UPDATE · Idempotency-Key",
+  after: "pending → paid → shipped → delivered",
+};
+
+function scrubMoments(section: HTMLElement) {
+  const rect = section.getBoundingClientRect();
+  const progress = Math.min(1, Math.max(0, -rect.top / (rect.height - window.innerHeight)));
+  section.querySelectorAll<HTMLElement>(".moments-panel").forEach((panel, i) => {
+    const stops = PANEL_OPACITY[i] ?? [];
+    const opacity = interpolate(progress, stops);
+    // Panels rise in from below and leave upwards.
+    const arriving = i > 0 && progress < (stops[1]?.[0] ?? 0);
+    panel.style.opacity = String(opacity);
+    panel.style.transform = `translateY(${String((1 - opacity) * (arriving ? 20 : -20))}px)`;
+  });
+  section.querySelectorAll<HTMLElement>(".moments-lit").forEach((lit, i) => {
+    const from = LIT_FROM[i] ?? 0;
+    const value =
+      i === 0
+        ? 1
+        : interpolate(progress, [
+            [from, 0],
+            [from + 0.05, 1],
+          ]);
+    lit.style.opacity = String(value);
+    lit.style.transform = `scale(${String(0.7 + 0.3 * value)})`;
+  });
+  const fill = section.querySelector<HTMLElement>(".moments-rail-fill");
+  if (fill) fill.style.transform = `scaleX(${String(Math.min(1, progress / 0.75))})`;
+}
+
+/**
+ * P1 pinned story: the four moments of an order, lit stage by stage as you scroll. With
+ * JavaScript off, with reduced motion or without scroll-timeline support it is a static
+ * overview, every stage lit and every panel in view.
+ */
+function FourMoments() {
+  const ref = useRef<HTMLElement>(null);
+  useScrollScrub(ref, scrubMoments, (section) => {
+    // Switching to the tall, pinned layout must never move content already on screen.
+    if (section.getBoundingClientRect().top < window.innerHeight) return false;
+    section.classList.add("is-scripted");
+    return true;
+  });
+  return (
+    <section
+      ref={ref}
+      aria-labelledby="moments-heading"
+      className="moments bg-black text-[#f5f5f7] dark:bg-[#0b0b0c]"
+    >
+      <div className="moments-stage">
+        <div className="container-page flex h-full flex-col justify-center py-16 sm:py-20">
+          <div className="text-center">
+            <p className="type-eyebrow text-[#a1a1a6]">Four moments</p>
+            <h2 id="moments-heading" className="type-section mt-2">
+              One order. Four safeguards.
+            </h2>
+          </div>
+          <div className="relative mx-auto mt-10 w-full max-w-[760px] sm:mt-14">
+            {/* Track from the first node's centre to the last; the fill is scrubbed. */}
+            <span
+              className="absolute top-6 right-[12.5%] left-[12.5%] h-0.5 rounded-full bg-[#424245]"
+              aria-hidden
+            >
+              <span className="moments-rail-fill block size-full origin-left rounded-full bg-[#4c9bff]" />
+            </span>
+            <ol className="relative grid grid-cols-4" aria-label="The four moments">
+              {PROTECTIONS.map((p) => {
+                const Icon = p.icon;
+                return (
+                  <li key={p.id} className="flex justify-center">
+                    <a
+                      href={`#${p.id}`}
+                      className="group flex min-h-11 flex-col items-center gap-3 rounded-[14px] px-1 text-center focus-visible:outline-[#4c9bff]"
+                    >
+                      <span className="relative flex size-12 items-center justify-center rounded-full bg-[#2c2c2e] text-[#a1a1a6]">
+                        <Icon className="size-5" strokeWidth={1.75} aria-hidden />
+                        <span
+                          className="moments-lit absolute inset-0 flex items-center justify-center rounded-full bg-[#0f62f0] text-white"
+                          aria-hidden
+                        >
+                          <Icon className="size-5" strokeWidth={1.75} />
+                        </span>
+                      </span>
+                      <span className="text-[13px] leading-tight font-medium text-[#f5f5f7] group-hover:underline sm:text-[14px]">
+                        {p.stage}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <div className="moments-panels mx-auto mt-10 grid w-full max-w-[880px] gap-x-10 gap-y-10 sm:mt-14 md:grid-cols-2">
+            {PROTECTIONS.map((p, index) => (
+              <div key={p.id} className="moments-panel">
+                <p className="text-[14px] font-medium text-[#a1a1a6] tabular-nums">
+                  {index + 1} of {PROTECTIONS.length} · {p.stage}
+                </p>
+                <h3 className="type-tile mt-2">{p.title}</h3>
+                <p className="type-body-lg mx-auto mt-3 max-w-[620px] text-[#a1a1a6]">
+                  {p.summary}
+                </p>
+                <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#1d1d1f] px-3.5 py-1.5 font-mono text-[13px] text-[#f5f5f7]">
+                  <ShieldCheck className="size-3.5 shrink-0 text-[#4c9bff]" aria-hidden />
+                  {PROOF[p.id]}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -184,12 +370,25 @@ function CheckoutEvidence() {
       </figcaption>
       <ol className="mt-6 space-y-0">
         {CHECKOUT_STEPS.map((step, index) => (
-          <li key={step.title} className="relative flex gap-4 pb-6 last:pb-0">
+          <li
+            key={step.title}
+            className="relative flex gap-4 pb-6 last:pb-0"
+            style={{ "--step": index } as CSSProperties}
+          >
             {index < CHECKOUT_STEPS.length - 1 && (
-              <span className="absolute top-8 bottom-0 left-[15px] w-px bg-[#424245]" aria-hidden />
+              <span className="absolute top-8 bottom-0 left-[15px] w-px bg-[#424245]" aria-hidden>
+                <span className="checkout-step-line block size-full bg-[#4c9bff]" />
+              </span>
             )}
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#2c2c2e] text-[13px] font-semibold tabular-nums">
+            {/* Lit is the final state; as the chapter scrolls past, the steps light in order. */}
+            <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-[#2c2c2e] text-[13px] font-semibold tabular-nums">
               {index + 1}
+              <span
+                className="checkout-step-lit absolute inset-0 flex items-center justify-center rounded-full bg-[#0f62f0] text-white"
+                aria-hidden
+              >
+                {index + 1}
+              </span>
             </span>
             <div className="pt-1">
               <p className="text-[17px] font-semibold">{step.title}</p>
@@ -259,6 +458,7 @@ function Chapter({
       aria-labelledby={`${item.id}-heading`}
       className={clsx(
         "scroll-mt-[100px] py-20 sm:py-28",
+        item.id === "checkout" && "checkout-steps-scope",
         tone === "gray" && "bg-surface-2",
         dark && "bg-black text-[#f5f5f7] dark:bg-[#0b0b0c]",
       )}
@@ -337,6 +537,7 @@ export function ProtectionPage() {
           charged.
         </p>
       </header>
+      <FourMoments />
       <Chapter item={protection("sign-in")} tone="gray">
         <SessionEvidence />
       </Chapter>
