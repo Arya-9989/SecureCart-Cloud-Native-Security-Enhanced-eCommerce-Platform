@@ -6,18 +6,20 @@ import threading
 import uuid
 from collections.abc import Callable
 from decimal import Decimal
+from unittest import mock
 
 import pytest
-from django.db import connection, connections
+from django.db import OperationalError, connection, connections, transaction
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from apps.accounts import tokens
 from apps.accounts.models import User
 from apps.cart.models import Cart, CartItem
 from apps.catalog.models import Category, Product
-from apps.orders import checkout
+from apps.orders import checkout, state
 from apps.orders.models import Order, OrderStatus
-from apps.payments.providers.mock import APPROVE_TOKEN
+from apps.payments.providers.base import RefundResult
+from apps.payments.providers.mock import APPROVE_TOKEN, MockPaymentProvider
 
 BUYERS = 8
 STOCK = 3
@@ -156,3 +158,52 @@ def test_parallel_refreshes_with_one_token_never_both_succeed() -> None:
     if any(o.reuse_detected_for for o in outcomes if isinstance(o, tokens.RefreshRejected)):
         # Reuse was detected, so every token in the family, including the winner's, is dead.
         assert not OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_refund_is_requested_without_holding_stock_locks() -> None:
+    """Cancelling a paid order calls the provider; checkouts must not queue behind that call."""
+    if connection.vendor != "postgresql":
+        pytest.skip("row locks need PostgreSQL")
+    category = Category.objects.create(name="Audio", slug="audio")
+    product = Product.objects.create(
+        name="Speaker",
+        slug="speaker",
+        sku="SPK-1",
+        category=category,
+        price=Decimal("10.00"),
+        stock=5,
+    )
+    user = User.objects.create_user("refund@example.com", "x" * 12, full_name="R")
+    CartItem.objects.create(cart=Cart.objects.create(user=user), product=product, quantity=1)
+    order = checkout.place_order(
+        user,
+        address=checkout.ShippingAddress("R", "1 Main St", "Town", "12345", "US"),
+        payment_token=APPROVE_TOKEN,
+        idempotency_key="refund-lock-1",
+    ).order
+
+    probe: dict[str, bool] = {}
+
+    def refund(**kwargs: object) -> RefundResult:
+        def try_lock() -> None:
+            try:
+                with transaction.atomic():
+                    Product.objects.select_for_update(nowait=True).get(pk=product.pk)
+                probe["product_locked"] = False
+            except OperationalError:
+                probe["product_locked"] = True
+            finally:
+                connections.close_all()
+
+        t = threading.Thread(target=try_lock)
+        t.start()
+        t.join(timeout=10)
+        return RefundResult(True, "mock_re_probe")
+
+    with mock.patch.object(MockPaymentProvider, "refund", side_effect=refund):
+        state.transition(order, OrderStatus.CANCELLED)
+    assert probe == {"product_locked": False}
+    product.refresh_from_db()
+    assert product.stock == 5

@@ -77,10 +77,13 @@ def transition(
         if not can_transition(current, target):
             raise InvalidTransition(current, target)
 
-        if target in _RELEASES_STOCK:
-            _release_stock(locked)
+        # Refund first, while only this order's row is locked: the provider call must not hold
+        # product rows that other shoppers' checkouts are waiting to lock. A failed refund
+        # raises before any stock moves, so the whole transition rolls back.
         if target == S.CANCELLED and current == S.PAID:
             _refund(locked)
+        if target in _RELEASES_STOCK:
+            _release_stock(locked)
 
         locked.status = target
         if target in _TIMESTAMP_FIELD:
