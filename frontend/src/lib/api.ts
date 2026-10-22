@@ -46,8 +46,34 @@ let accessToken: string | null = null;
 let refreshInFlight: Promise<User | null> | null = null;
 const sessionListeners = new Set<(user: User | null) => void>();
 
+/**
+ * A non-secret "this browser has signed in before" flag. The refresh cookie is httpOnly, so
+ * the SPA can't see whether one exists; without this hint every anonymous page load would
+ * send a refresh request that is certain to fail with 401. It holds no token or identifier.
+ */
+export const SESSION_HINT_KEY = "securecart-has-session";
+
+function setSessionHint(present: boolean): void {
+  try {
+    if (present) localStorage.setItem(SESSION_HINT_KEY, "1");
+    else localStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+    /* storage blocked: we simply attempt the refresh every time */
+  }
+}
+
+/** True unless this browser is known never to have signed in (or signed out since). */
+export function mayHaveSession(): boolean {
+  try {
+    return localStorage.getItem(SESSION_HINT_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
 export function setSession(token: string | null): void {
   accessToken = token;
+  setSessionHint(token !== null);
 }
 
 export function hasSession(): boolean {
@@ -76,11 +102,11 @@ export function refreshSession(): Promise<User | null> {
         headers: { Accept: "application/json", "X-CSRF-Protection": "1" },
       });
       if (!response.ok) {
-        accessToken = null;
+        setSession(null);
         return null;
       }
       const data = (await response.json()) as TokenResponse;
-      accessToken = data.access;
+      setSession(data.access);
       return data.user;
     } catch {
       accessToken = null;

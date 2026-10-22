@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { onSessionChange, refreshSession, setSession } from "@/lib/api";
+import { mayHaveSession, onSessionChange, refreshSession, setSession } from "@/lib/api";
 import { authApi } from "@/lib/endpoints";
 import type { User } from "@/lib/types";
 
@@ -19,10 +19,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    // Restore the session from the httpOnly refresh cookie on page load.
-    void refreshSession().then((restored) => {
-      if (active) apply(restored);
-    });
+    // Restore the session from the httpOnly refresh cookie on page load. Browsers that have
+    // never signed in skip the request, which could only answer 401.
+    if (mayHaveSession()) {
+      void refreshSession().then((restored) => {
+        if (active) apply(restored);
+      });
+    } else {
+      apply(null);
+    }
     const unsubscribe = onSessionChange((next) => {
       apply(next);
       if (!next) queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "catalog" });
