@@ -1,0 +1,94 @@
+[project]
+name = "securecart-backend"
+version = "1.0.0"
+description = "SecureCart REST API: Django + DRF e-commerce backend with JWT auth, RBAC and transactional checkout."
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "django==5.2.18",
+    "djangorestframework==3.18.3",
+    "djangorestframework-simplejwt==5.5.1",
+    "drf-spectacular==0.30.0",
+    "drf-spectacular-sidecar==2026.10.1",
+    "django-cors-headers==4.9.0",
+    "django-filter==26.2",
+    "psycopg[binary]==3.3.6",
+    "argon2-cffi==25.1.0",
+    "gunicorn==26.2.0",
+    "whitenoise==6.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-django==4.14.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.1",
+    "mypy==1.19.1",
+    "django-stubs[compatible-mypy]==5.2.9",
+    "djangorestframework-stubs[compatible-mypy]==3.16.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/migrations/*"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "S", "DJ", "SIM", "C4", "RUF", "PT", "N", "RET", "PL",
+]
+ignore = [
+    "PLR0913", # DRF/Django signatures legitimately take many args
+    "PLR2004", # magic values are fine in tests and HTTP status checks
+    "RUF012",  # Django/DRF class attributes (Meta.fields, permission_classes) are not mutated
+    "N818",    # domain exceptions read better as InvalidTransition than InvalidTransitionError
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PLR0915"]
+"manage.py" = ["PLC0415"]
+"apps/*/management/commands/*" = ["S311"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+exclude = ["migrations/"]
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["django_filters.*", "drf_spectacular_sidecar.*", "corsheaders.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.test_settings"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.test_settings"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "postgres: requires PostgreSQL (row-level locking); skipped on SQLite",
+]
+filterwarnings = ["error::RuntimeWarning"]
+
+[tool.coverage.run]
+source = ["apps", "config"]
+omit = ["*/migrations/*", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
