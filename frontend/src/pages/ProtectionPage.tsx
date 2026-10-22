@@ -193,11 +193,16 @@ function FourMoments() {
       className="moments bg-black text-[#f5f5f7] dark:bg-[#0b0b0c]"
     >
       <div className="moments-stage">
-        <div className="container-page flex h-full flex-col justify-center py-16 sm:py-20">
+        {/* Top-anchored, not centred: centred, the heading moved whenever the panels
+            changed height (as the web font arrived), which counted as layout shift. */}
+        <div className="container-page flex h-full flex-col justify-start pt-[clamp(2.5rem,9svh,6rem)] pb-16 sm:pb-20">
           <div className="text-center">
             <p className="type-eyebrow text-[#a1a1a6]">Four moments</p>
             <h2 id="moments-heading" className="type-section mt-2">
-              One order. Four safeguards.
+              {/* A fixed break on phones: the fallback font and Inter would otherwise wrap
+                  this differently, and the swap would shift the rail below (CLS). */}
+              One order.
+              <br className="sm:hidden" /> Four safeguards.
             </h2>
           </div>
           <div className="relative mx-auto mt-10 w-full max-w-[760px] sm:mt-14">
