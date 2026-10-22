@@ -109,7 +109,9 @@ export function StoreLayout() {
         Skip to content
       </a>
       <Header />
-      <main id="main" className="flex-1">
+      {/* At least a viewport tall, so the footer never starts on screen and then jumps down
+          when data arrives (layout shift). */}
+      <main id="main" className="min-h-[calc(100svh-48px)] flex-1">
         <Outlet />
       </main>
       <Footer />

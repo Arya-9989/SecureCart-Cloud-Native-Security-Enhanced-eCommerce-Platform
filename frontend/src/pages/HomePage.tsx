@@ -42,10 +42,14 @@ function Hero({ featured, loading }: { featured: Product[]; loading: boolean }) 
           </Link>
         </div>
       </div>
-      <div className="mx-auto mt-12 grid max-w-[1240px] grid-cols-3 items-end px-1 sm:mt-16 sm:px-6">
+      <div className="mx-auto mt-10 grid max-w-[1240px] grid-cols-1 items-end px-6 sm:mt-16 sm:grid-cols-3">
         {loading
           ? Array.from({ length: 3 }, (_, i) => (
-              <div key={i} className="aspect-[4/3]" aria-hidden />
+              <div
+                key={i}
+                className={clsx("aspect-[4/3]", i !== 1 && "hidden sm:block")}
+                aria-hidden
+              />
             ))
           : ordered.map((product, index) =>
               product ? (
@@ -54,7 +58,10 @@ function Hero({ featured, loading }: { featured: Product[]; loading: boolean }) 
                   to={`/products/${product.slug}`}
                   className={clsx(
                     "group block origin-bottom rounded-[28px] text-center",
-                    index === 1 ? "z-10 scale-[1.3] sm:scale-[1.38]" : "scale-[1.08]",
+                    // Phones show the lead product alone and large; wider screens a trio.
+                    index === 1
+                      ? "z-10 mx-auto w-[92%] scale-[1.12] sm:w-auto sm:scale-[1.38]"
+                      : "hidden scale-[1.08] sm:block",
                   )}
                 >
                   <ProductImage

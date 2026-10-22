@@ -243,7 +243,7 @@ function StatusChart({ stats }: { stats: DashboardStats }) {
             <YAxis
               type="category"
               dataKey="label"
-              width={118}
+              width={132}
               tick={{ fill: "var(--text-muted)", fontSize: 13 }}
               tickLine={false}
               axisLine={{ stroke: "var(--line-strong)" }}
@@ -265,6 +265,8 @@ function StatusChart({ stats }: { stats: DashboardStats }) {
               dataKey="count"
               fill="var(--series-1)"
               barSize={20}
+              // A zero still gets a hairline mark, so its value label renders.
+              minPointSize={2}
               radius={[0, 4, 4, 0]}
               isAnimationActive={false}
             >

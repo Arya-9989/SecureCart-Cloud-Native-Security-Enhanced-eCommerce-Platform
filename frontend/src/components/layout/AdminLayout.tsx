@@ -35,63 +35,66 @@ export function AdminLayout() {
       >
         Skip to content
       </a>
-      <aside className="z-20 border-b border-line bg-surface-2 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:border-r lg:border-b-0">
-        <div className="flex h-14 items-center justify-between px-5">
-          <Logo to="/admin" suffix="Admin" compact />
-          <div className="lg:hidden">
-            <ThemeToggle />
-          </div>
-        </div>
-        <nav
-          aria-label="Admin"
-          className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0"
-        >
-          {links.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                clsx(
-                  "flex shrink-0 items-center gap-3 rounded-[10px] px-3 py-2 text-[14px] transition-colors",
-                  isActive
-                    ? "bg-surface font-medium text-fg shadow-card"
-                    : "text-fg/75 hover:bg-surface-3/60 hover:text-fg",
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon
-                    className={clsx("size-[18px]", isActive ? "text-brand" : "text-muted")}
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  {label}
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="mt-auto hidden p-3 lg:block">
-          <div className="flex items-center gap-3 rounded-[14px] p-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[12px] font-semibold text-fg">
-              {initials(user?.full_name ?? "")}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-medium">{user?.full_name}</p>
-              <p className="truncate text-[12px] text-muted">{user?.email}</p>
+      <aside className="z-20 border-b border-line bg-surface-2 lg:border-r lg:border-b-0">
+        {/* The column fills the page; its content sticks to the viewport. */}
+        <div className="lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+          <div className="flex h-14 items-center justify-between px-5">
+            <Logo to="/admin" suffix="Admin" compact />
+            <div className="lg:hidden">
+              <ThemeToggle />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                void logout();
-              }}
-              className="flex size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-3 hover:text-fg"
-              aria-label="Sign out"
-            >
-              <LogOut className="size-4" aria-hidden />
-            </button>
+          </div>
+          <nav
+            aria-label="Admin"
+            className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0"
+          >
+            {links.map(({ to, label, icon: Icon, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) =>
+                  clsx(
+                    "flex shrink-0 items-center gap-3 rounded-[10px] px-3 py-2 text-[14px] transition-colors",
+                    isActive
+                      ? "bg-surface font-medium text-fg shadow-card"
+                      : "text-fg/75 hover:bg-surface-3/60 hover:text-fg",
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon
+                      className={clsx("size-[18px]", isActive ? "text-brand" : "text-muted")}
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                    {label}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="mt-auto hidden p-3 lg:block">
+            <div className="flex items-center gap-3 rounded-[14px] p-2.5">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[12px] font-semibold text-fg">
+                {initials(user?.full_name ?? "")}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-medium">{user?.full_name}</p>
+                <p className="truncate text-[12px] text-muted">{user?.email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void logout();
+                }}
+                className="flex size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-3 hover:text-fg"
+                aria-label="Sign out"
+              >
+                <LogOut className="size-4" aria-hidden />
+              </button>
+            </div>
           </div>
         </div>
       </aside>

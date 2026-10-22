@@ -56,7 +56,7 @@ export function ProductCard({ product }: { product: Product }) {
               "hit relative z-10 inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[14px] font-medium transition-colors",
               soldOut
                 ? "cursor-not-allowed bg-surface-3 text-muted"
-                : "bg-action text-brand-fg hover:bg-action-hover disabled:opacity-60",
+                : "bg-brand-soft text-brand hover:bg-action hover:text-brand-fg disabled:opacity-60",
             )}
             aria-label={soldOut ? `${product.name} is sold out` : `Add ${product.name} to bag`}
           >

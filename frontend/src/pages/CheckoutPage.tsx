@@ -358,7 +358,7 @@ export function CheckoutPage() {
         </div>
 
         <aside
-          className="rounded-[22px] bg-surface-2 p-6 sm:p-7 lg:sticky lg:top-20"
+          className="order-first rounded-[22px] bg-surface-2 p-6 sm:p-7 lg:sticky lg:top-20 lg:order-none"
           aria-label="Order summary"
         >
           <h2 className="text-[21px] font-semibold tracking-[-0.02em]">Order summary</h2>
