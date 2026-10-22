@@ -48,6 +48,46 @@ test.describe("Checkout", () => {
     await expectAccessible(page, "order confirmation");
   });
 
+  test("can be completed with the keyboard alone", async ({ page }) => {
+    await signIn(page, "customer");
+    await page.goto("/checkout");
+    await expect(page.getByRole("heading", { level: 1, name: "Checkout." })).toBeVisible();
+
+    // Tab in from the top of the page, as a keyboard user would.
+    const street = page.getByLabel("Street address");
+    for (
+      let i = 0;
+      i < 40 && !(await street.evaluate((el) => el === document.activeElement));
+      i++
+    ) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(street).toBeFocused();
+    await page.keyboard.type("500 Congress Avenue");
+    await page.keyboard.press("Tab"); // apartment (optional)
+    await page.keyboard.press("Tab");
+    await page.keyboard.type("Austin");
+    await page.keyboard.press("Tab");
+    await page.keyboard.type("78701");
+    await page.keyboard.press("Tab"); // country
+    await page.keyboard.press("Tab"); // the payment choice is one tab stop
+
+    const approve = page.getByRole("radio", { name: /approve/ });
+    await expect(approve).toBeFocused();
+    // The focus ring is drawn on the whole card, since the native radio is visually hidden.
+    const card = page.locator("label").filter({ has: approve });
+    await expect(card).toHaveCSS("outline-style", "solid");
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("radio", { name: /decline/ })).toBeChecked();
+    await page.keyboard.press("ArrowLeft");
+    await expect(approve).toBeChecked();
+
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: /Place order/ })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}\?placed=1$/);
+  });
+
   test("a declined payment explains itself and leaves the bag intact", async ({
     page,
     consoleErrors,

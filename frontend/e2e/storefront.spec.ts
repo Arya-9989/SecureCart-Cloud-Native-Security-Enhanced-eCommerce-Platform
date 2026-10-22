@@ -57,6 +57,36 @@ test.describe("Storefront", () => {
     }
   });
 
+  test("private and not-found pages are noindex; robots.txt lets crawlers see that", async ({
+    page,
+    request,
+  }) => {
+    const robotsMeta = page.locator('meta[name="robots"]');
+    await page.goto("/shop");
+    await expect(page.getByRole("heading", { level: 1, name: "All products" })).toBeVisible();
+    await expect(robotsMeta).toHaveCount(0);
+
+    await page.goto("/no-such-page");
+    await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+    await expect(robotsMeta).toHaveAttribute("content", "noindex");
+
+    const robots = await (await request.get("/robots.txt")).text();
+    expect(robots).toContain("Disallow: /api/");
+    expect(robots).not.toMatch(/Disallow: \/(cart|checkout|orders|admin)/);
+  });
+
+  test("the phone footer is a set of 44px disclosure rows", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/protection");
+    const footer = page.getByRole("contentinfo");
+    await footer.locator("summary", { hasText: "Trust" }).click();
+    const link = footer.getByRole("link", { name: "How your order is protected" });
+    await expect(link).toBeVisible();
+    expect((await link.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await expect(footer).toContainText("A portfolio project by Arya Mahindrakar.");
+    await expectAccessible(page, "footer (phone, section open)");
+  });
+
   test("reduced motion leaves no infinite animations", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");

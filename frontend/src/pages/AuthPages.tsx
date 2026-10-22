@@ -39,7 +39,10 @@ function AuthShell({
       <header className="glass sticky top-0 z-10 border-b border-line/60">
         <div className="mx-auto flex h-12 max-w-[1024px] items-center justify-between px-4">
           <Logo compact />
-          <Link to="/" className="hit text-[12px] text-fg/80 hover:text-fg">
+          <Link
+            to="/"
+            className="inline-flex h-11 items-center text-[12px] text-fg/80 hover:text-fg"
+          >
             Back to the store
           </Link>
         </div>
@@ -70,7 +73,7 @@ function AuthShell({
                 </li>
               ))}
             </ul>
-            <Link to="/protection#sign-in" className="link mt-4 inline-block text-[14px]">
+            <Link to="/protection#sign-in" className="link mt-3 inline-block py-1 text-[14px]">
               How your order is protected
             </Link>
           </details>
@@ -118,7 +121,7 @@ export function LoginPage() {
           New to SecureCart?{" "}
           <Link
             to={`/register${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}`}
-            className="link"
+            className="link inline-block py-0.5"
           >
             Create an account
           </Link>
@@ -229,7 +232,11 @@ export function RegisterPage() {
       subtitle={
         <>
           Already have one?{" "}
-          <Link to="/login" className="link">
+          <Link
+            // Keep where the shopper was heading, as the sign-in page's link to here does.
+            to={`/login${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}`}
+            className="link inline-block py-0.5"
+          >
             Sign in
           </Link>
         </>

@@ -34,7 +34,7 @@ export function ProductCard({ product }: { product: Product }) {
         <h3 className="mt-1 text-[17px] leading-snug font-semibold tracking-[-0.015em] text-fg">
           <Link
             to={`/products/${product.slug}`}
-            className="rounded-sm after:absolute after:inset-0 after:rounded-[24px] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
+            className="block rounded-sm py-0.5 after:absolute after:inset-0 after:rounded-[24px] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
           >
             {product.name}
           </Link>

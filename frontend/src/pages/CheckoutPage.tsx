@@ -286,7 +286,9 @@ export function CheckoutPage() {
                 <label
                   key={method.token}
                   className={clsx(
-                    "flex cursor-pointer gap-3 rounded-[18px] border p-5 transition-colors",
+                    // The whole card is the control; the native radio stays in the form and
+                    // the accessibility tree, and the ring follows its keyboard focus.
+                    "flex cursor-pointer gap-3 rounded-[18px] border p-5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring",
                     selectedToken === method.token
                       ? "border-brand ring-1 ring-brand"
                       : "border-line-strong hover:border-muted",
@@ -295,8 +297,12 @@ export function CheckoutPage() {
                   <input
                     type="radio"
                     value={method.token}
-                    className="mt-1 size-4 accent-[var(--action)]"
+                    className="peer sr-only"
                     {...register("payment_token")}
+                  />
+                  <span
+                    aria-hidden
+                    className="mt-1 size-[18px] shrink-0 rounded-full border-[1.5px] border-line-strong bg-surface transition-[border-width,border-color] duration-200 peer-checked:border-[5.5px] peer-checked:border-action"
                   />
                   <span>
                     <span className="flex items-center gap-2 text-[17px] font-semibold">
@@ -374,7 +380,7 @@ export function CheckoutPage() {
               currency={cart.currency}
             />
           </div>
-          <Link to="/cart" className="link mt-6 inline-block text-[15px]">
+          <Link to="/cart" className="link mt-4 inline-flex min-h-11 items-center text-[15px]">
             Edit bag
           </Link>
         </aside>

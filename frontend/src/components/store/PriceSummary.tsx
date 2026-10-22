@@ -1,8 +1,7 @@
 import { clsx } from "clsx";
 
 import { formatMoney } from "@/lib/format";
-
-export const FREE_SHIPPING_THRESHOLD = 75;
+import { STORE_RULES } from "@/lib/storeRules";
 
 export function PriceSummary({
   subtotal,
@@ -22,8 +21,8 @@ export function PriceSummary({
   large?: boolean;
 }) {
   const sub = Number.parseFloat(subtotal);
-  const remaining = FREE_SHIPPING_THRESHOLD - sub;
-  const progress = Math.min(100, (sub / FREE_SHIPPING_THRESHOLD) * 100);
+  const remaining = STORE_RULES.freeShippingFrom - sub;
+  const progress = Math.min(100, (sub / STORE_RULES.freeShippingFrom) * 100);
   const row = clsx("flex justify-between gap-6", large ? "text-[17px]" : "text-[15px]");
   return (
     <div>

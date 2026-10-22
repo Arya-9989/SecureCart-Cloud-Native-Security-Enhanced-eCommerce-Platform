@@ -182,9 +182,14 @@ describe("Protection page", () => {
     ]) {
       expect(screen.getByRole("heading", { level: 2, name: heading })).toBeInTheDocument();
     }
+    // Files open as blobs and folders as trees, so no source link relies on a GitHub redirect.
     expect(screen.getByRole("link", { name: "backend/apps/orders/checkout.py" })).toHaveAttribute(
       "href",
-      expect.stringContaining("/tree/main/backend/apps/orders/checkout.py"),
+      expect.stringContaining("/blob/main/backend/apps/orders/checkout.py"),
+    );
+    expect(screen.getByRole("link", { name: "backend/apps/cart" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/tree/main/backend/apps/cart"),
     );
   });
 });
@@ -208,5 +213,30 @@ describe("Footer", () => {
     renderApp("/shop");
     const footer = await screen.findByRole("contentinfo");
     expect(footer).toHaveTextContent(/A portfolio project by Arya Mahindrakar\./);
+  });
+});
+
+describe("Search engine directives", () => {
+  const robots = () => document.head.querySelector('meta[name="robots"]')?.getAttribute("content");
+
+  it("marks private pages noindex", async () => {
+    server.use(
+      http.get("*/api/cart/", () => HttpResponse.json(makeCart({ items: [], item_count: 0 }))),
+    );
+    renderApp("/cart", { user: customer });
+    expect(await screen.findByText("Your bag is empty.")).toBeInTheDocument();
+    expect(robots()).toBe("noindex");
+  });
+
+  it("marks not-found pages noindex", async () => {
+    renderApp("/no-such-page");
+    expect(await screen.findByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+    expect(robots()).toBe("noindex");
+  });
+
+  it("leaves public pages indexable", async () => {
+    renderApp("/shop");
+    expect(await screen.findByRole("heading", { level: 1, name: "All products" })).toBeVisible();
+    expect(robots()).toBeUndefined();
   });
 });

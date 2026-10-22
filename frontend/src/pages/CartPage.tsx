@@ -7,16 +7,15 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, QuantityStepper, Skeleton } from "@/components/ui/misc";
 import { useCart, useRemoveCartItem, useUpdateCartItem } from "@/hooks/queries";
 import { formatMoney } from "@/lib/format";
+import { STORE_RULES } from "@/lib/storeRules";
 import type { CartItem } from "@/lib/types";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
-
-const MAX_PER_LINE = 10;
 
 function BagLine({ item }: { item: CartItem }) {
   const update = useUpdateCartItem();
   const remove = useRemoveCartItem();
   const busy = update.isPending || remove.isPending;
-  const max = Math.max(1, Math.min(item.product.stock, MAX_PER_LINE));
+  const max = Math.max(1, Math.min(item.product.stock, STORE_RULES.maxPerLine));
   return (
     <li className="grid grid-cols-[96px_1fr] gap-5 py-8 sm:grid-cols-[180px_1fr] sm:gap-8">
       <Link
@@ -67,7 +66,7 @@ function BagLine({ item }: { item: CartItem }) {
               remove.mutate(item.id);
             }}
             disabled={busy}
-            className="hit rounded-sm text-[15px] text-brand hover:underline disabled:opacity-50"
+            className="inline-flex h-11 items-center rounded-sm text-[15px] text-brand hover:underline disabled:opacity-50"
             aria-label={`Remove ${item.product.name} from bag`}
           >
             Remove
@@ -112,6 +111,7 @@ export function CartPage() {
       <div className="container-text py-16">
         <EmptyState
           icon={ShoppingBag}
+          pageHeading
           title="Your bag is empty."
           description="It's saved to your account, so anything you add shows up on every device you sign in on."
           action={

@@ -13,13 +13,17 @@ export function EmptyState({
   description,
   action,
   className,
+  pageHeading = false,
 }: {
   icon: LucideIcon;
   title: string;
+  /** Render the title as the page's h1 (not-found pages have no other heading). */
+  pageHeading?: boolean;
   description?: ReactNode;
   action?: ReactNode;
   className?: string;
 }) {
+  const Heading = pageHeading ? "h1" : "h2";
   return (
     <div
       className={clsx(
@@ -28,9 +32,9 @@ export function EmptyState({
       )}
     >
       <Icon className="size-10 text-muted" strokeWidth={1.5} aria-hidden />
-      <h2 className="mt-5 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg sm:text-[28px]">
+      <Heading className="mt-5 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg sm:text-[28px]">
         {title}
-      </h2>
+      </Heading>
       {description && <p className="mt-2 max-w-md text-[17px] text-muted">{description}</p>}
       {action && <div className="mt-7">{action}</div>}
     </div>

@@ -102,6 +102,7 @@ export function OrderDetailPage() {
           <EmptyState
             icon={PackageX}
             title="Order not found"
+            pageHeading
             description="This order doesn't exist or belongs to another account."
             action={
               <Link to="/orders" className={buttonClasses("primary")}>
@@ -136,7 +137,7 @@ export function OrderDetailPage() {
       ) : (
         <Link
           to="/orders"
-          className="hit inline-flex items-center gap-0.5 rounded-sm text-[15px] text-brand hover:underline"
+          className="inline-flex h-11 items-center gap-0.5 rounded-sm text-[15px] text-brand hover:underline"
         >
           <ChevronLeft className="size-4" aria-hidden /> Orders
         </Link>
@@ -177,9 +178,9 @@ export function OrderDetailPage() {
 
         <div className="mt-8 grid items-start gap-8 lg:grid-cols-[1fr_300px]">
           <section aria-labelledby="items-heading">
-            <h3 id="items-heading" className="text-[21px] font-semibold tracking-[-0.02em]">
+            <h2 id="items-heading" className="text-[21px] font-semibold tracking-[-0.02em]">
               Items
-            </h3>
+            </h2>
             <ul className="mt-3 divide-y divide-line border-y border-line">
               {order.items.map((item) => (
                 <li key={item.id} className="flex items-center gap-4 py-4">
@@ -211,9 +212,9 @@ export function OrderDetailPage() {
 
           <div className="space-y-8">
             <section aria-labelledby="ship-heading">
-              <h3 id="ship-heading" className="text-[15px] font-semibold">
+              <h2 id="ship-heading" className="text-[15px] font-semibold">
                 Shipping to
-              </h3>
+              </h2>
               <address className="mt-2 text-[15px] leading-relaxed text-muted not-italic">
                 {address.name}
                 <br />
@@ -231,9 +232,9 @@ export function OrderDetailPage() {
               </address>
             </section>
             <section aria-labelledby="history-heading">
-              <h3 id="history-heading" className="mb-4 text-[15px] font-semibold">
+              <h2 id="history-heading" className="mb-4 text-[15px] font-semibold">
                 History
-              </h3>
+              </h2>
               <OrderHistoryList order={order} />
             </section>
           </div>

@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /checkout
-Disallow: /cart
-Disallow: /orders
+# The JSON API is not content. Private pages (bag, checkout, orders, admin) are not blocked
+# here on purpose: they carry <meta name="robots" content="noindex">, which a crawler can
+# only see if it is allowed to fetch the page.
+Disallow: /api/

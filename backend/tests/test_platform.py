@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal
 from io import StringIO
+from pathlib import Path
 from unittest import mock
 
 import pytest
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from rest_framework.test import APIClient
@@ -162,3 +166,32 @@ class TestErrorEnvelopeEverywhere:
         assert response.json()["error"]["code"] == "server_error"
         assert b"hunter2" not in response.content
         assert b"Traceback" not in response.content
+
+
+class TestStoreRulesContract:
+    """The storefront quotes the store's rules; they must equal the server's defaults."""
+
+    RULES_TS = Path(settings.BASE_DIR).parent / "frontend" / "src" / "lib" / "storeRules.ts"
+    SETTINGS_PY = Path(settings.BASE_DIR) / "config" / "settings.py"
+
+    def _frontend(self) -> dict[str, Decimal]:
+        if not self.RULES_TS.exists():
+            pytest.skip("frontend sources are not part of this checkout")
+        text = self.RULES_TS.read_text(encoding="utf-8")
+        return {k: Decimal(v) for k, v in re.findall(r"^\s+(\w+): ([\d.]+),$", text, re.M)}
+
+    def _default(self, call: str) -> str:
+        text = self.SETTINGS_PY.read_text(encoding="utf-8")
+        match = re.search(rf'env_(?:str|int)\("{call}", "?([\d./a-z]+)"?\)', text)
+        assert match, call
+        return match.group(1)
+
+    def test_frontend_copy_matches_server_defaults(self) -> None:
+        rules = self._frontend()
+        assert rules["freeShippingFrom"] == Decimal(self._default("FREE_SHIPPING_THRESHOLD"))
+        assert rules["flatShippingFee"] == Decimal(self._default("FLAT_SHIPPING_FEE"))
+        assert rules["taxPercent"] == Decimal(self._default("TAX_RATE")) * 100
+        assert rules["maxPerLine"] == Decimal(self._default("MAX_CART_LINE_QUANTITY"))
+        assert rules["accessTokenMinutes"] == Decimal(self._default("JWT_ACCESS_MINUTES"))
+        assert rules["refreshTokenDays"] == Decimal(self._default("JWT_REFRESH_DAYS"))
+        assert f"{rules['signInAttemptsPerMinute']}/min" == self._default("THROTTLE_AUTH")

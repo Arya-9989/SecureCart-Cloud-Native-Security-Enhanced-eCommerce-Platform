@@ -31,7 +31,7 @@ export function AdminLayout() {
     <div className="min-h-screen bg-bg lg:grid lg:grid-cols-[240px_1fr]">
       <a
         href="#admin-main"
-        className="sr-only z-50 rounded-full bg-action px-4 py-2 text-[14px] font-medium text-brand-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        className="sr-only z-50 rounded-full bg-action text-[14px] font-medium text-brand-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-4 focus:py-2"
       >
         Skip to content
       </a>

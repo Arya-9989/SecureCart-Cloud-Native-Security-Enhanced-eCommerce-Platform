@@ -11,12 +11,13 @@ import { ProductImage, QuantityStepper, Skeleton, StockBadge } from "@/component
 import { Reveal } from "@/components/ui/Reveal";
 import { useAddToCart, useProduct, useProducts } from "@/hooks/queries";
 import { ApiError } from "@/lib/api";
+import { NoIndex } from "@/lib/NoIndex";
 import { formatMoney } from "@/lib/format";
+import { FLAT_SHIPPING_FEE, FREE_SHIPPING_FROM, STORE_RULES } from "@/lib/storeRules";
 import type { Product } from "@/lib/types";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
-const MAX_PER_ORDER = 10;
-const FREE_SHIPPING_FROM = 75;
+const { freeShippingFrom, maxPerLine } = STORE_RULES;
 
 /*
  * Gallery views. The catalog has one studio illustration per product, so the second view
@@ -90,14 +91,14 @@ function Gallery({ product }: { product: Product }) {
 }
 
 function TrustList({ product }: { product: Product }) {
-  const freeOnItsOwn = Number.parseFloat(product.price) >= FREE_SHIPPING_FROM;
+  const freeOnItsOwn = Number.parseFloat(product.price) >= freeShippingFrom;
   const rows = [
     {
       icon: Truck,
-      title: freeOnItsOwn ? "Ships free" : `Free shipping from $${FREE_SHIPPING_FROM}`,
+      title: freeOnItsOwn ? "Ships free" : `Free shipping from ${FREE_SHIPPING_FROM}`,
       text: freeOnItsOwn
-        ? `This item alone clears the $${FREE_SHIPPING_FROM} free-shipping threshold.`
-        : "Below that, shipping is a flat $6.99.",
+        ? `This item alone clears the ${FREE_SHIPPING_FROM} free-shipping threshold.`
+        : `Below that, shipping is a flat ${FLAT_SHIPPING_FEE}.`,
     },
     {
       icon: Lock,
@@ -122,7 +123,7 @@ function TrustList({ product }: { product: Product }) {
         </li>
       ))}
       <li className="p-4 text-[14px]">
-        <Link to="/protection#checkout" className="link">
+        <Link to="/protection#checkout" className="link inline-block py-1">
           How your order is protected
         </Link>
       </li>
@@ -139,7 +140,7 @@ function PurchasePanel({
 }) {
   const [quantity, setQuantity] = useState(1);
   const { add, isPending } = useAddToCart();
-  const max = Math.max(1, Math.min(product.stock, MAX_PER_ORDER));
+  const max = Math.max(1, Math.min(product.stock, maxPerLine));
   const soldOut = product.stock <= 0;
 
   return (
@@ -147,7 +148,7 @@ function PurchasePanel({
       <nav aria-label="Breadcrumb" className="text-[13px] text-muted">
         <ol className="flex items-center gap-1.5">
           <li>
-            <Link to="/shop" className="hover:text-fg hover:underline">
+            <Link to="/shop" className="inline-block py-1 hover:text-fg hover:underline">
               Shop
             </Link>
           </li>
@@ -155,7 +156,7 @@ function PurchasePanel({
           <li>
             <Link
               to={`/shop?category=${product.category.slug}`}
-              className="hover:text-fg hover:underline"
+              className="inline-block py-1 hover:text-fg hover:underline"
             >
               {product.category.name}
             </Link>
@@ -286,11 +287,11 @@ function Compare({ product, others }: { product: Product; others: Product[] }) {
     { label: "Availability", value: (p) => availability(p.stock) },
     {
       label: "Free shipping on its own",
-      value: (p) => (Number.parseFloat(p.price) >= FREE_SHIPPING_FROM ? "Yes" : "No"),
+      value: (p) => (Number.parseFloat(p.price) >= freeShippingFrom ? "Yes" : "No"),
     },
     {
-      label: "Most per order",
-      value: (p) => (p.stock > 0 ? String(Math.min(p.stock, MAX_PER_ORDER)) : "—"),
+      label: "Most per bag line",
+      value: (p) => (p.stock > 0 ? String(Math.min(p.stock, maxPerLine)) : "—"),
     },
     { label: "SKU", value: (p) => p.sku },
   ];
@@ -417,10 +418,12 @@ export function ProductPage() {
   if (error) {
     return (
       <div className="container-page py-16">
+        {error instanceof ApiError && error.status === 404 && <NoIndex />}
         {error instanceof ApiError && error.status === 404 ? (
           <EmptyState
             icon={PackageX}
             title="Product not found"
+            pageHeading
             description="It may have been removed or is no longer available."
             action={
               <Link to="/shop" className={buttonClasses("primary")}>

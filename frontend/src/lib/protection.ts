@@ -1,5 +1,7 @@
 import { KeyRound, Lock, ScrollText, ShoppingBag, type LucideIcon } from "lucide-react";
 
+import { STORE_RULES as R } from "./storeRules";
+
 /**
  * The "how your order is protected" story. Every sentence here describes a mechanism that
  * exists in this repository (the `source` path says where), so the trust cues shown at
@@ -27,9 +29,9 @@ export const PROTECTIONS: Protection[] = [
     details: [
       "Passwords are hashed with Argon2, and new ones must pass length, common-password and similarity checks.",
       "The refresh cookie is httpOnly, Secure and SameSite=Strict, and is only sent to /api/auth/.",
-      "Access tokens expire after 10 minutes and live only in memory.",
+      `Access tokens expire after ${R.accessTokenMinutes} minutes and live only in memory.`,
       "Each refresh rotates the token. Replaying a used one revokes every session on the account.",
-      "Sign-in is limited to 10 attempts a minute per IP address, and a wrong email or password gets the same answer.",
+      `Sign-in, registration and password changes are limited to ${R.signInAttemptsPerMinute} attempts a minute per IP address, and a wrong email or password gets the same answer.`,
     ],
     source: "backend/apps/accounts",
   },
@@ -42,7 +44,7 @@ export const PROTECTIONS: Protection[] = [
       "Your bag is kept on the server against your account, and every quantity is checked against the stock actually on hand.",
     details: [
       "Your bag follows you to any device you sign in on.",
-      "Each line is capped at 10, and never above the units in stock.",
+      `Each line is capped at ${R.maxPerLine}, and never above the units in stock.`,
       "Nothing is held back from other shoppers until you place the order.",
     ],
     source: "backend/apps/cart",

@@ -34,8 +34,8 @@ test.describe("Admin", () => {
     await palette.getByRole("combobox").fill("ship");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/admin\/orders\?status=paid$/);
-    await expect(page.getByRole("tab", { name: "To ship" })).toHaveAttribute(
-      "aria-selected",
+    await expect(page.getByRole("button", { name: "To ship" })).toHaveAttribute(
+      "aria-pressed",
       "true",
     );
   });

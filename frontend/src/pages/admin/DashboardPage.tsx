@@ -159,7 +159,7 @@ function RevenueChart({ stats }: { stats: DashboardStats }) {
         </ResponsiveContainer>
       </div>
       <details className="group mt-5">
-        <summary className="hit inline-flex cursor-pointer list-none items-center gap-1 rounded-sm text-[14px] text-brand hover:underline [&::-webkit-details-marker]:hidden">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-sm text-[14px] text-brand hover:underline [&::-webkit-details-marker]:hidden">
           <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
           Show data table
         </summary>
@@ -340,7 +340,7 @@ function LowStock({ stats }: { stats: DashboardStats }) {
         </div>
         <Link
           to="/admin/products?low_stock=5"
-          className="hit inline-flex shrink-0 items-center gap-0.5 rounded-sm text-[14px] text-brand hover:underline"
+          className="inline-flex min-h-11 shrink-0 items-center gap-0.5 rounded-sm text-[14px] text-brand hover:underline"
         >
           Manage <ChevronRight className="size-4" aria-hidden />
         </Link>

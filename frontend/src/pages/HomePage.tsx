@@ -11,6 +11,7 @@ import { Reveal } from "@/components/ui/Reveal";
 import { useCategories, useProducts } from "@/hooks/queries";
 import { formatMoney } from "@/lib/format";
 import { PROTECTIONS } from "@/lib/protection";
+import { FLAT_SHIPPING_FEE, FREE_SHIPPING_FROM } from "@/lib/storeRules";
 import type { Category, Product } from "@/lib/types";
 
 // One request feeds the whole page: the catalog is small (the API caps a page at 100).
@@ -224,8 +225,8 @@ function Latest({ products }: { products: Product[] }) {
 const PROMISES = [
   {
     icon: Truck,
-    title: "Free shipping over $75.",
-    text: "A flat $6.99 below that, shown in your bag before you check out.",
+    title: `Free shipping from ${FREE_SHIPPING_FROM}.`,
+    text: `A flat ${FLAT_SHIPPING_FEE} below that, shown in your bag before you check out.`,
   },
   {
     icon: RefreshCcw,

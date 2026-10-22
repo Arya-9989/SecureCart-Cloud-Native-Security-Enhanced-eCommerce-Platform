@@ -1,22 +1,43 @@
+import { ChevronDown } from "lucide-react";
 import { Link, Outlet } from "react-router";
 
 import { useCategories } from "@/hooks/queries";
+import { FLAT_SHIPPING_FEE, FREE_SHIPPING_FROM, STORE_RULES } from "@/lib/storeRules";
 
 import { Header } from "./Header";
 
 const REPO_URL =
   "https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform";
 
+/**
+ * Footer column. Phones get Apple's pattern: each column is a 44px disclosure row, so every
+ * link is a full-width touch target instead of a 15px line of text. Wider screens show the
+ * columns open, with links spaced to at least 24px (WCAG 2.5.8).
+ */
 function FooterColumn({ title, children }: { title: string; children: React.ReactNode }) {
+  const list = <ul className="pb-2 sm:mt-2 sm:pb-0">{children}</ul>;
   return (
-    <div>
-      <h2 className="text-[12px] font-semibold text-fg">{title}</h2>
-      <ul className="mt-2.5 space-y-2 text-[12px]">{children}</ul>
+    <div className="border-b border-line-strong/60 sm:border-0">
+      <details className="group sm:hidden">
+        <summary className="flex h-11 cursor-pointer list-none items-center justify-between text-[13px] font-semibold text-fg [&::-webkit-details-marker]:hidden">
+          {title}
+          <ChevronDown
+            className="size-4 text-muted transition-transform group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        {list}
+      </details>
+      <div className="hidden sm:block">
+        <h2 className="text-[12px] font-semibold text-fg">{title}</h2>
+        {list}
+      </div>
     </div>
   );
 }
 
-const footerLink = "text-muted transition-colors hover:text-fg hover:underline underline-offset-2";
+const footerLink =
+  "flex min-h-11 items-center text-[14px] text-muted transition-colors hover:text-fg hover:underline underline-offset-2 sm:inline-flex sm:min-h-7 sm:text-[12px]";
 
 function Footer() {
   const { data: categories } = useCategories();
@@ -29,11 +50,12 @@ function Footer() {
             no card details are collected and no real money moves.
           </p>
           <p>
-            Free shipping applies to orders of $75 or more; below that, shipping is a flat $6.99.
-            Estimated tax is 8% of the subtotal. Orders can be cancelled until they ship.
+            Free shipping applies to orders of {FREE_SHIPPING_FROM} or more; below that, shipping is
+            a flat {FLAT_SHIPPING_FEE}. Estimated tax is {STORE_RULES.taxPercent}% of the subtotal.
+            Orders can be cancelled until they ship.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-8 py-6 sm:grid-cols-4">
+        <div className="py-2 sm:grid sm:grid-cols-4 sm:gap-8 sm:py-6">
           <FooterColumn title="Shop">
             <li>
               <Link className={footerLink} to="/shop">
@@ -104,7 +126,7 @@ export function StoreLayout() {
     <div className="flex min-h-screen flex-col">
       <a
         href="#main"
-        className="sr-only z-50 rounded-full bg-action px-4 py-2 text-[14px] font-medium text-brand-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        className="sr-only z-50 rounded-full bg-action text-[14px] font-medium text-brand-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-4 focus:py-2"
       >
         Skip to content
       </a>

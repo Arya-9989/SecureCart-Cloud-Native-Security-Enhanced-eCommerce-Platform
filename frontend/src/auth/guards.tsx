@@ -4,18 +4,32 @@ import { Link, Navigate, useLocation } from "react-router";
 
 import { PageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { NoIndex } from "@/lib/NoIndex";
 
 import { useAuth } from "./useAuth";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { status } = useAuth();
   const location = useLocation();
-  if (status === "loading") return <PageSpinner label="Checking your session" />;
+  // Every signed-in page is private, whatever happens next.
+  if (status === "loading") {
+    return (
+      <>
+        <NoIndex />
+        <PageSpinner label="Checking your session" />
+      </>
+    );
+  }
   if (status === "anonymous") {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
   }
-  return <>{children}</>;
+  return (
+    <>
+      <NoIndex />
+      {children}
+    </>
+  );
 }
 
 /**

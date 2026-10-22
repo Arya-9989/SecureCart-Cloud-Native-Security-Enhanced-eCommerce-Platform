@@ -31,7 +31,7 @@ export function Logo({
   compact?: boolean;
 }) {
   return (
-    <Link to={to} className="hit flex shrink-0 items-center gap-2 rounded-md">
+    <Link to={to} className="flex min-h-11 shrink-0 items-center gap-2 rounded-md">
       <LogoMark className={compact ? "size-5.5" : "size-6"} />
       <span
         className={clsx(

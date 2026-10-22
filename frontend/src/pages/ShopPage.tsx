@@ -13,6 +13,14 @@ import type { ProductQuery } from "@/lib/endpoints";
 
 const PAGE_SIZE = 12;
 
+function titleFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 const SORTS = [
   { value: "", label: "Recommended" },
   { value: "-created_at", label: "Newest" },
@@ -180,7 +188,11 @@ export function ShopPage() {
   const { data: categories } = useCategories();
   const [showFilters, setShowFilters] = useState(false);
 
-  const categoryName = categories?.find((c) => c.slug === query.category)?.name;
+  // Until the category list arrives, name the category from its slug, so the heading and the
+  // filter chip render in their final place on the first paint (no layout shift).
+  const categoryName = query.category
+    ? (categories?.find((c) => c.slug === query.category)?.name ?? titleFromSlug(query.category))
+    : undefined;
   const heading = query.search
     ? `Results for "${query.search}"`
     : (categoryName ?? (query.featured ? "Featured products" : "All products"));
@@ -263,7 +275,7 @@ export function ShopPage() {
           ))}
           <button
             type="button"
-            className="hit text-[13px] font-medium text-brand hover:underline"
+            className="inline-flex h-8 items-center px-1 text-[13px] font-medium text-brand hover:underline"
             onClick={() => {
               update({
                 search: null,
@@ -299,9 +311,12 @@ export function ShopPage() {
           </div>
         </aside>
         <section
-          aria-label="Products"
+          aria-labelledby="products-heading"
           className={clsx(isFetching && data && "opacity-60 transition")}
         >
+          <h2 id="products-heading" className="sr-only">
+            Products
+          </h2>
           {error ? (
             <ErrorState error={error} onRetry={() => void refetch()} />
           ) : data?.results.length === 0 ? (

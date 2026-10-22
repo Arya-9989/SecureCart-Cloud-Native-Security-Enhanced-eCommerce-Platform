@@ -6,10 +6,14 @@ import { Link } from "react-router";
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { Reveal } from "@/components/ui/Reveal";
 import { PROTECTIONS, protection, type Protection } from "@/lib/protection";
+import { STORE_RULES } from "@/lib/storeRules";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const REPO =
-  "https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform/tree/main/";
+  "https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform";
+
+/** GitHub URL for a source path: files open as blobs, folders as trees. */
+const sourceUrl = (path: string) => `${REPO}/${/\.\w+$/.test(path) ? "blob" : "tree"}/main/${path}`;
 
 /** Sticky local nav (Apple product-page pattern) with the active section underlined. */
 function LocalNav() {
@@ -107,11 +111,11 @@ function SessionEvidence() {
         <Chip>Secure</Chip>
         <Chip>SameSite=Strict</Chip>
         <Chip>Path=/api/auth/</Chip>
-        <Chip>7 days, rotated on use</Chip>
+        <Chip>{STORE_RULES.refreshTokenDays} days, rotated on use</Chip>
       </div>
       <p className="mt-6 text-[15px] font-semibold">Access token: memory only</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Chip>10 minutes</Chip>
+        <Chip>{STORE_RULES.accessTokenMinutes} minutes</Chip>
         <Chip>never in localStorage</Chip>
       </div>
       <p className="mt-6 border-t border-line pt-4 text-[13px] text-muted">
@@ -130,11 +134,11 @@ function BagEvidence() {
         The most you can add to one line
       </figcaption>
       <p className="mt-5 font-mono text-[clamp(1.25rem,1rem+1.2vw,1.75rem)] font-medium tracking-tight">
-        min(stock on hand, 10)
+        min(stock on hand, {STORE_RULES.maxPerLine})
       </p>
       <dl className="mt-6 grid grid-cols-3 gap-3 text-center">
         {[
-          ["24 in stock", "up to 10"],
+          ["24 in stock", `up to ${STORE_RULES.maxPerLine}`],
           ["3 in stock", "up to 3"],
           ["0 in stock", "sold out"],
         ].map(([stock, limit]) => (
@@ -293,10 +297,10 @@ function Chapter({
             ))}
           </ul>
           <a
-            href={`${REPO}${item.source}`}
+            href={sourceUrl(item.source)}
             rel="noreferrer"
             className={clsx(
-              "mt-8 inline-flex items-center gap-2 rounded-sm font-mono text-[13px] hover:underline",
+              "mt-6 inline-flex min-h-11 items-center gap-2 rounded-sm font-mono text-[13px] hover:underline",
               dark ? "text-[#4c9bff]" : "text-brand",
             )}
           >

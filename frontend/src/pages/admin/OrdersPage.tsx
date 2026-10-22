@@ -201,7 +201,8 @@ export function AdminOrdersPage() {
       <AdminPageHeader title="Orders" description="Monitor payments and fulfil shipments." />
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div
-          role="tablist"
+          // Filters, not tabs: there are no tab panels and no arrow-key model to honour.
+          role="group"
           aria-label="Filter by status"
           className="no-scrollbar flex gap-1 overflow-x-auto rounded-full bg-surface-2 p-1"
         >
@@ -209,13 +210,12 @@ export function AdminOrdersPage() {
             <button
               key={tab.value}
               type="button"
-              role="tab"
-              aria-selected={status === tab.value}
+              aria-pressed={status === tab.value}
               onClick={() => {
                 setParam("status", tab.value);
               }}
               className={clsx(
-                "shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-medium transition-colors",
+                "inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-[14px] font-medium transition-colors",
                 status === tab.value
                   ? "bg-surface text-fg shadow-card"
                   : "text-muted hover:text-fg",
@@ -252,7 +252,7 @@ export function AdminOrdersPage() {
                     <Td>
                       <button
                         type="button"
-                        className="font-mono font-semibold text-brand hover:underline"
+                        className="inline-flex min-h-11 items-center font-mono font-semibold text-brand hover:underline"
                         onClick={() => {
                           setOpenId(order.id);
                         }}
