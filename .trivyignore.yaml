@@ -1,0 +1,127 @@
+# Accepted vulnerability findings for `scripts/scan_images.sh` (Trivy, YAML ignore format).
+#
+# Rules (docs/adr/0001-container-image-scanning.md):
+#   - one entry per CVE, scoped with `paths` to the exact file it was found in, so the same
+#     CVE anywhere else (for example in an image we build) still fails the gate;
+#   - every entry states why the finding is not exploitable here;
+#   - every entry expires (at most 90 days out). An expired entry stops matching, the gate
+#     fails again, and the finding must be re-reviewed: removed if upstream fixed it, or
+#     renewed with fresh evidence.
+#
+# Current entries: Go standard-library CVEs reported against `gosu` in the official
+# postgres:17.11-alpine image. gosu (built with Go 1.24.6) only drops root and execs
+# PostgreSQL at container start: it reads /etc/passwd and calls setgroups/setuid/exec.
+# Evidence, reproducible with `docker cp $(docker create postgres:17.11-alpine):/usr/local/bin/gosu .`
+# then `grep -ac 'crypto/tls\.' gosu` (and the same for every package below): the binary
+# contains zero function symbols from net, net/http, net/url, net/mail, mime, crypto/tls,
+# crypto/x509, encoding/asn1, encoding/xml, html/template or os.Root. Its only linked
+# packages are runtime, syscall, os, os/exec, os/signal and github.com/moby/sys/user.
+# The vulnerable code is not in the binary, so it cannot be reached. Upstream gosu documents
+# the same position for stdlib scanner findings.
+# Reviewed 2026-10-23 by Arya Mahindrakar.
+
+vulnerabilities:
+  - id: CVE-2025-68121
+    paths: ["usr/local/bin/gosu"]
+    statement: "CRITICAL, Go stdlib crypto/tls. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2025-61726
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/url. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2025-61729
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/x509. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-111943
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/x509. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-25679
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/url. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-27145
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/x509. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-32280
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/x509 and crypto/tls. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-32281
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/x509. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-32283
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/tls. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-33811
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net (LookupCNAME). Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-33814
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/http (HTTP/2). Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-33818
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib encoding/asn1. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-39820
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/mail. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-39821
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/http and x/net/idna. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-39822
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib os.Root. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-39836
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net (Dial/LookupPort, Windows only). Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-42499
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/mail. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-42504
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib mime. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-56853
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/http (HTTP/2). Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-56858
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib html/template. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-56859
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib encoding/xml. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-56860
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/url. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-56862
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/tls. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-78667
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/http. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-78669
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib net/http (HTTP/2). Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21
+  - id: CVE-2026-97031
+    paths: ["usr/local/bin/gosu"]
+    statement: "HIGH, Go stdlib crypto/tls. Package not linked into gosu (0 symbols); unreachable."
+    expired_at: 2027-01-21

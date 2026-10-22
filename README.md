@@ -128,6 +128,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 | **Payments** | No card data reaches the backend: the client sends an opaque provider token. Checkout requires an `Idempotency-Key` header, so retries never double-charge or double-reserve, even when they race the first attempt: reservations are serialised per shopper and the key is re-checked under that lock. A retry gets the first attempt's answer, including its `402` if the card was declined. |
 | **Audit trail** | Append-only `AuditLog` for admin create/update/delete, order transitions, role changes, logins, failed logins, password changes and refresh-token reuse, with actor, diff, client IP (proxy-aware) and request ID. |
 | **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`). |
+| **Image scanning** | CI scans every image compose runs with Trivy ([`scripts/scan_images.sh`](scripts/scan_images.sh)) and fails on any HIGH or CRITICAL vulnerability that has a fix. Trivy itself is a pinned release checked against a SHA-256 taken from its Sigstore-verified checksums file. Accepted findings live in [`.trivyignore.yaml`](.trivyignore.yaml): one entry per CVE, scoped to one file, with evidence and an expiry date at most 90 days out, after which the gate fails again ([ADR 0001](docs/adr/0001-container-image-scanning.md)). Dockerfiles are linted with hadolint. |
 
 ## Tech stack
 
@@ -180,7 +181,7 @@ npm run dev
 
 Different ports: `uv run python manage.py runserver 127.0.0.1:8001` for the API, then `VITE_PORT=5180 VITE_DEV_API_PROXY=http://127.0.0.1:8001 npm run dev` for the SPA.
 
-Other commands: `uv run python manage.py expire_pending_orders --minutes 30` releases stock held by abandoned payments, and `python scripts/screenshots.py --base-url http://localhost:8080` regenerates the README screenshots.
+Other commands: `uv run python manage.py expire_pending_orders --minutes 30` releases stock held by abandoned payments, and `python scripts/screenshots.py --base-url http://localhost:8080` regenerates the README screenshots. To scan the images as CI does, run `docker compose build && scripts/scan_images.sh gate` (needs [Trivy](https://trivy.dev) on `PATH`, or point `TRIVY` at the binary).
 
 ## Configuration
 
@@ -240,7 +241,7 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 
 **Measured** (2026-10-23, the Docker stack behind nginx, every audited route in light and dark at 1440px and 390px): no axe violations reported, CLS at most 0.0072, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 89 to 94 on the public routes and 90 to 93 on the signed-in ones; it moves by a point or two between runs on the same build (three repeat runs of a product page gave 90, 91 and 90). With JavaScript off, the measured public pages (home, shop, a category, `/protection` and a product page) show 100% of the words they show with it on; scrolling those pages drops no frames (0% of frames over 20 ms), and with reduced motion no text is left hidden. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 101 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
 
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; Trivy and hadolint on every image and Dockerfile; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
 
 ## Project structure
 
@@ -299,7 +300,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 - Product image uploads to object storage with server-side validation.
 - Invoice PDF generation.
 - Redis for caching and throttling, plus a scheduler for `expire_pending_orders`.
-- Container image scanning.
 - Deployment manifests (Kubernetes or a managed container service) with TLS termination.
 
 ## License

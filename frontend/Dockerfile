@@ -15,7 +15,7 @@ RUN find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' -o -name
         -o -name '*.txt' \) -size +1k -exec gzip -9 -k -n {} +
 
 # ---- serve with unprivileged nginx (runs as uid 101, listens on 8080) -----------------
-FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine3.24 AS runtime
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html
