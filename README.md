@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.svg">
+  <img src="docs/hero-light.svg" alt="SecureCart: Good things, bought safely. Trust-first commerce with httpOnly rotating refresh tokens, RBAC, oversell-proof checkout, idempotent payments, an audit log and a strict CSP.">
+</picture>
+
 # SecureCart
 
 [![CI](https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Arya-9989/SecureCart-Cloud-Native-Security-Enhanced-eCommerce-Platform/actions/workflows/ci.yml)
@@ -29,7 +34,7 @@ Customers browse a catalog, manage a server-side cart, check out and track order
   <img src="docs/screenshots/mobile-admin.png" width="230" alt="Mobile admin dashboard">
 </p>
 
-More screenshots: [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [cart](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
+More screenshots: [how your order is protected](docs/screenshots/protection.png) · [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [bag](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
 
 > All screenshots are captured from the Docker stack by [`scripts/screenshots.py`](scripts/screenshots.py), which drives the real UI against the seeded demo data. Product images are original SVGs drawn by [`scripts/generate_product_art.py`](scripts/generate_product_art.py).
 
@@ -40,13 +45,16 @@ More screenshots: [shop](docs/screenshots/shop.png) · [product](docs/screenshot
 **Storefront**
 - Catalog with categories, search (name, description, SKU, category), price and availability filters, sorting and pagination, all reflected in the URL.
 - Product pages with stock indicators ("Only 3 left", "Sold out") and related products.
-- Server-side cart that follows the customer across devices, with per-line limits checked against live stock.
+- Server-side bag (cart) that follows the customer across devices, with per-line limits checked against live stock; previewed from the nav as a popover on desktop and a drawer on mobile.
 - Checkout with address validation, a free-shipping threshold and tax, and a pluggable payment provider (an offline mock by default).
 - Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund).
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
+- A "How your order is protected" page (`/protection`) and quiet trust cues at sign-in, bag, checkout and order confirmation. Every statement describes a mechanism in this codebase and links to it; the copy lives in one file (`frontend/src/lib/protection.ts`).
+
+**Design**: Apple Store calm on white and `#f5f5f7` with one deep-blue accent, Inter with optical sizing, designed light and dark themes, WCAG AA contrast throughout, reduced-motion support and 44×44 touch targets. Product images are original SVG illustrations lit as one studio set.
 
 **Admin console** (`/admin`, admin role only)
-- Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts.
+- Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts, plus a Ctrl/⌘K command palette.
 - Product and inventory management: create, edit, hide/activate and delete (refused with `409` if the product has order history).
 - Order monitoring and fulfilment: filter by status, search, and ship/deliver/cancel through the order state machine.
 - User and role management: promote or demote admins and suspend accounts (each change revokes that user's sessions).
@@ -122,8 +130,8 @@ Row locks are held only for the reservation transaction, never across the paymen
 |---|---|
 | Backend | Python 3.12, Django 5.2 LTS, Django REST Framework, SimpleJWT (rotation + blacklist), django-filter, drf-spectacular (OpenAPI 3), argon2-cffi, gunicorn, WhiteNoise |
 | Database | PostgreSQL 17 (SQLite for quick local runs; the concurrency test needs PostgreSQL) |
-| Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, TanStack Query, React Hook Form + Zod, Recharts, Lucide icons, self-hosted Inter |
-| Testing | pytest, pytest-django, coverage; Vitest, Testing Library, MSW |
+| Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, TanStack Query, React Hook Form + Zod, Recharts, Motion, Radix UI, sonner, vaul, cmdk, Lucide icons, self-hosted Inter Variable |
+| Testing | pytest, pytest-django, coverage; Vitest, Testing Library, MSW; Playwright + axe-core |
 | Quality | Ruff (lint + format), mypy (strict, django-stubs), ESLint (typescript-eslint strict, jsx-a11y), Prettier |
 | Delivery | Multi-stage Dockerfiles, docker compose, nginx-unprivileged, GitHub Actions |
 
@@ -209,16 +217,19 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 
 ```bash
 cd backend && uv run pytest --cov     # 181 tests; set DATABASE_URL to run on PostgreSQL
-cd frontend && npm test               # 48 tests
+cd frontend && npm test               # 56 tests
+cd frontend && npm run e2e            # 15 Playwright + axe specs (needs a running, seeded API)
 ```
 
 **Backend** (97% line coverage): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling; a parametrized RBAC matrix proving anonymous users get `401` and customers `403` on every admin endpoint; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays, insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; and the dashboard maths.
 
 The key concurrency guarantee has its own test: **eight threads race to buy three units on PostgreSQL, and exactly three orders succeed while stock ends at zero.** It runs in CI against a PostgreSQL service container (and is skipped on SQLite).
 
-**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, cart, sign-in, registration, admin guard and checkout (including a fresh idempotency key after a decline).
+**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, bag, sign-in, registration, admin guard, command palette and checkout (including a fresh idempotency key after a decline and inline validation). The tests wait on real milestones (MSW responses, loaded modules) rather than polling deadlines, so they behave the same on a loaded CI machine.
 
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff, mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx.
+**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, and the admin dashboard, palette and tables. Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff, mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
 
 ## Project structure
 
@@ -245,6 +256,7 @@ The key concurrency guarantee has its own test: **eight threads race to buy thre
 │   │   ├── lib/                # API client, endpoints, types, validation, formatting
 │   │   └── test/               # MSW server, fixtures, render helpers
 │   ├── public/products/        # generated product artwork (SVG)
+│   ├── e2e/                    # Playwright + axe end-to-end specs
 │   ├── nginx/                  # server config and security headers
 │   └── Dockerfile, package.json, package-lock.json
 ├── scripts/                    # product-art generator, screenshot capture
@@ -272,7 +284,7 @@ The key concurrency guarantee has its own test: **eight threads race to buy thre
 - Product image uploads to object storage with server-side validation.
 - Invoice PDF generation.
 - Redis for caching and throttling, plus a scheduler for `expire_pending_orders`.
-- Playwright end-to-end tests in CI and container image scanning.
+- Container image scanning.
 - Deployment manifests (Kubernetes or a managed container service) with TLS termination.
 
 ## License

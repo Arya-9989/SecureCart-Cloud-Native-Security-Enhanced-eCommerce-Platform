@@ -57,6 +57,8 @@ def storefront(base: str, browser, dark: bool = False) -> None:  # type: ignore[
         return
     page.goto(f"{base}/shop?category=audio")
     shot(page, "shop")
+    page.goto(f"{base}/protection")
+    shot(page, "protection", full_page=True)
     page.goto(f"{base}/products/aurora-wireless-headphones")
     shot(page, "product")
     page.goto(f"{base}/login")
@@ -65,8 +67,8 @@ def storefront(base: str, browser, dark: bool = False) -> None:  # type: ignore[
     login(page, base, "maya@example.com", "SecureCart!Demo1")
     for slug in ("aurora-wireless-headphones", "halo-table-lamp"):
         page.goto(f"{base}/products/{slug}")
-        page.get_by_role("button", name="Add to cart").click()
-        page.get_by_text("Added to cart").first.wait_for()
+        page.get_by_role("button", name="Add to Bag").first.click()
+        page.get_by_text("Added to bag").first.wait_for()
     page.goto(f"{base}/cart")
     shot(page, "cart")
     page.goto(f"{base}/checkout")
@@ -74,7 +76,7 @@ def storefront(base: str, browser, dark: bool = False) -> None:  # type: ignore[
     page.get_by_label("City").fill("Austin")
     page.get_by_label("Postal code").fill("78701")
     shot(page, "checkout")
-    page.get_by_role("button", name="Place order").click()
+    page.get_by_role("button", name="Place order", exact=False).click()
     page.wait_for_url("**/orders/**")
     shot(page, "order-confirmation")
     page.goto(f"{base}/orders")
