@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { OrderHistoryList, OrderProgress } from "@/components/store/OrderTimeline";
+import { InvoiceButton } from "@/components/store/InvoiceButton";
 import { PriceSummary } from "@/components/store/PriceSummary";
 import { Button } from "@/components/ui/Button";
 import { buttonClasses } from "@/components/ui/buttonClasses";
@@ -209,15 +210,22 @@ export function OrderDetailPage() {
             </div>
             <p className="mt-1 text-[15px] text-muted">Placed {formatDateTime(order.created_at)}</p>
           </div>
-          {order.can_cancel && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setConfirming(true);
-              }}
-            >
-              Cancel order
-            </Button>
+          {(order.paid_at ?? order.can_cancel) && (
+            <div className="flex flex-wrap gap-3">
+              {order.paid_at && (
+                <InvoiceButton path={`/orders/${encodeURIComponent(order.id)}/invoice/`} />
+              )}
+              {order.can_cancel && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setConfirming(true);
+                  }}
+                >
+                  Cancel order
+                </Button>
+              )}
+            </div>
           )}
         </div>
 

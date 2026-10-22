@@ -6,6 +6,7 @@ from typing import Any, cast
 import django_filters
 from django.conf import settings
 from django.db.models import Count, Prefetch, QuerySet
+from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -28,7 +29,7 @@ from apps.accounts.permissions import IsAdminRole
 from apps.accounts.throttles import CheckoutRateThrottle
 from apps.audit import services as audit
 from apps.core.exceptions import Conflict
-from apps.orders import checkout, state
+from apps.orders import checkout, invoice, state
 from apps.orders.models import Order, OrderItem, OrderStatus
 from apps.orders.serializers import (
     AdminOrderSerializer,
@@ -47,6 +48,26 @@ def _error(code: str, message: str, http_status: int, **extra: Any) -> Response:
 
 def _detail_queryset() -> QuerySet[Order]:
     return Order.objects.select_related("user").prefetch_related("items", "events")
+
+
+_INVOICE_SCHEMA = extend_schema(
+    responses={
+        (200, "application/pdf"): OpenApiTypes.BINARY,
+        409: OpenApiResponse(description="The order was never paid"),
+    },
+    summary="Download the order's invoice (PDF)",
+)
+
+
+def _invoice_response(order: Order) -> HttpResponse:
+    try:
+        pdf = invoice.render(order)
+    except invoice.InvoiceUnavailable as exc:
+        raise Conflict("Invoices are issued once an order is paid.") from exc
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{invoice.filename(order)}"'
+    response["Content-Length"] = str(len(pdf))
+    return response
 
 
 class CheckoutView(APIView):
@@ -171,6 +192,13 @@ class OrderViewSet(
     def get_serializer_class(self) -> type[BaseSerializer[Order]]:
         return OrderSummarySerializer if self.action == "list" else OrderSerializer
 
+    @extend_schema(tags=["orders"])
+    @_INVOICE_SCHEMA
+    @action(detail=True, methods=["get"])
+    def invoice(self, request: Request, pk: str | None = None) -> HttpResponse:
+        # get_object() goes through get_queryset(): another customer's order is a 404.
+        return _invoice_response(self.get_object())
+
     @extend_schema(
         request=None,
         responses={200: OrderSerializer, 409: OpenApiResponse(description="Not cancellable")},
@@ -206,6 +234,12 @@ class AdminOrderViewSet(
 
     def get_queryset(self) -> QuerySet[Order]:
         return _detail_queryset()
+
+    @extend_schema(tags=["admin"])
+    @_INVOICE_SCHEMA
+    @action(detail=True, methods=["get"], url_path="invoice")
+    def invoice(self, request: Request, pk: str | None = None) -> HttpResponse:
+        return _invoice_response(self.get_object())
 
     @extend_schema(
         request=TransitionSerializer,

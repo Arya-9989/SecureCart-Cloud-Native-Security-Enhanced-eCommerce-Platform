@@ -47,7 +47,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 - Product pages with stock indicators ("Only 3 left", "Sold out") and related products.
 - Server-side bag (cart) that follows the customer across devices, with per-line limits checked against live stock; previewed from the nav as a popover on desktop and a drawer on mobile.
 - Checkout with address validation, a free-shipping threshold and tax, and a pluggable payment provider: an offline mock by default, or **Stripe in test mode** (PaymentIntents confirmed by signed webhooks; the order page waits for the confirmation).
-- Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund).
+- Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund), plus a PDF invoice for every paid order, rendered on the server from the order's own snapshot.
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
 - Public pages (home, shop and each category, `/protection` and every product) are prerendered at build time and hydrated, so they read completely before, or without, any JavaScript.
 - Email confirmation and password reset by emailed one-time link. Checkout waits for a confirmed address; the bag and checkout say why and offer a fresh link.
@@ -133,7 +133,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 | **Refresh rotation and theft detection** | Every refresh rotates the token and blacklists the old one. Replaying an already-rotated token is treated as theft: **all** of that user's refresh tokens are revoked and the event is audited. Rotation locks the token's row, so requests racing with the same token cannot both succeed: one rotates, the others count as replays (a PostgreSQL test races six of them). |
 | **CSRF** | The cookie-authenticated endpoints (refresh, logout) also require an `X-CSRF-Protection: 1` header, which cross-site forms cannot send and cross-origin scripts cannot send without a CORS preflight that is denied. Everything else uses bearer tokens. |
 | **Authorization (RBAC)** | An `IsAdminRole` permission guards every admin endpoint. The role is read from the database on each request, not from token claims, so demotion or suspension takes effect immediately. Admins cannot demote or suspend themselves, and role/status changes revoke the target user's sessions. |
-| **Object-level access** | Orders and cart items are always queried through the requesting user, so another user's order returns `404` (no ID enumeration). Order URLs use UUIDs. |
+| **Object-level access** | Orders, invoices and cart items are always queried through the requesting user, so another user's order or invoice returns `404` (no ID enumeration). Order URLs use UUIDs. |
 | **Input validation** | DRF serializers on every write; database `CHECK` constraints (`price > 0`, `stock >= 0`, `quantity >= 1`); strict formats for SKUs, postal codes, country codes and image URLs (site-relative or `https://` only, so no `javascript:` or protocol-relative URLs). JSON-only parsers and a 1 MiB body limit. |
 | **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change (keyed by IP even for signed-in callers, so a stolen access token cannot brute-force the current password); 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; 5/min per IP on endpoints that send email, plus a silent per-inbox budget (3/hour, which unknown addresses spend too) so nobody can flood someone else's inbox; plus global anonymous/user limits. Every limit is counted by one atomic Lua script in Redis (a sliding-window log on Redis's own clock), so it holds across workers and replicas. DRF's own read-then-write history admitted 40 of 40 requests against a limit of 10 under contention; the atomic limiter admits exactly 10. If Redis is down, credential and email limits fail closed and the rest fail open ([ADR 0004](docs/adr/0004-redis-rate-limits-catalog-cache-and-scheduler.md)). |
 | **User enumeration** | Sign-in answers the same for an unknown email, a wrong password and an inactive account, and Django's auth backend equalises timing. Forgot-password answers byte-for-byte the same for registered, unknown and suspended addresses, never sooner than 400 ms, and sends mail off the request path, so neither the answer nor the response time reveals an account. Registration still says an address is taken, because it signs the new account in immediately; it is limited to 10 attempts a minute per IP. |
@@ -236,6 +236,7 @@ All configuration comes from environment variables, and the defaults are the sec
 | `REDIS_URL` | *(empty)* | Redis for atomic rate limits and the catalog cache (compose: the `redis` service, password from `REDIS_PASSWORD`, which is required there) |
 | `DJANGO_CACHE_BACKEND` | `redis` with `REDIS_URL`, else `locmem` | `redis`, `db` or `locmem` |
 | `CATALOG_CACHE_SECONDS` | `300` | Longest a cached catalog response lives (writes invalidate it immediately) |
+| `STORE_NAME` / `STORE_ADDRESS` / `INVOICE_FOOTER` | `SecureCart` / a sample address (lines separated by `\|`) / a demo-store notice | Seller details printed on invoices |
 | `MEDIA_STORAGE` | `disabled` (`s3` in compose) | `s3`, `memory` (tests) or `disabled` (uploads answer `503`) |
 | `MEDIA_S3_ENDPOINT` / `MEDIA_S3_BUCKET` / `MEDIA_S3_REGION` / `MEDIA_S3_ACCESS_KEY` / `MEDIA_S3_SECRET_KEY` | *(AWS)* / `securecart-media` / `us-east-1` / *(empty)* / *(empty)* | Object storage (compose: MinIO with `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`, the latter required) |
 | `MAX_IMAGE_UPLOAD_BYTES` / `MAX_IMAGE_PIXELS` / `MAX_IMAGE_EDGE` | `5242880` / `40000000` / `2000` | Upload limits and the stored size |
@@ -275,9 +276,9 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 | Cart | `GET/DELETE /api/cart/` · `POST /api/cart/items/` · `PATCH/DELETE /api/cart/items/{id}/` | Customer (own cart) |
 | Checkout | `POST /api/checkout/` with an `Idempotency-Key` header: `201`, `200` (replay), `202` (Stripe: awaiting the webhook), `402` (declined), `403` (address not confirmed), `409` (stock or empty cart) | Customer |
 | Payments | `GET /api/payments/config/` (provider, mode, test methods) · `POST /api/payments/webhooks/stripe/` (Stripe-signed) | Public |
-| Orders | `GET /api/orders/` · `GET /api/orders/{id}/` · `POST /api/orders/{id}/cancel/` | Customer (own orders) |
+| Orders | `GET /api/orders/` · `GET /api/orders/{id}/` · `POST /api/orders/{id}/cancel/` · `GET /api/orders/{id}/invoice/` (PDF; `409` if unpaid) | Customer (own orders) |
 | Media | `GET /api/media/products/{id}/{key}.webp` (uploaded product images) | Public |
-| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD, `POST {id}/image/` multipart upload) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` and `POST /api/admin/orders/{id}/transition/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
+| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD, `POST {id}/image/` multipart upload) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` with `POST {id}/transition/` and `GET {id}/invoice/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
 | System | `GET /api/health/` | Public |
 
 ## Testing
@@ -352,7 +353,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 
 ## Roadmap (future work, not implemented)
 
-- Invoice PDF generation.
 - Deployment manifests (Kubernetes or a managed container service) with TLS termination.
 
 ## License

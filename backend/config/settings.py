@@ -305,6 +305,16 @@ FREE_SHIPPING_THRESHOLD = env_str("FREE_SHIPPING_THRESHOLD", "75.00")
 FLAT_SHIPPING_FEE = env_str("FLAT_SHIPPING_FEE", "6.99")
 TAX_RATE = env_str("TAX_RATE", "0.08")
 MAX_CART_LINE_QUANTITY = env_int("MAX_CART_LINE_QUANTITY", 10)
+# Seller details printed on invoices (apps.orders.invoice).
+STORE_NAME = env_str("STORE_NAME", "SecureCart")
+# Lines are separated by "|" so the value fits on one line of a .env file.
+STORE_ADDRESS = env_str(
+    "STORE_ADDRESS", "1 Example Street|San Francisco, CA 94105|United States"
+).replace("|", "\n")
+INVOICE_FOOTER = env_str(
+    "INVOICE_FOOTER",
+    "SecureCart is a portfolio demonstration store: no goods are shipped and no real money moves.",
+)
 
 # Product images (apps.catalog.media). "s3" for MinIO/S3, "memory" for tests, or "disabled".
 MEDIA_STORAGE = env_str("MEDIA_STORAGE", "disabled")

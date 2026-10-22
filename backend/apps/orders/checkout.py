@@ -224,6 +224,7 @@ def _reserve(user: User, address: ShippingAddress, idempotency_key: str) -> Orde
         subtotal=totals.subtotal,
         shipping=totals.shipping,
         tax=totals.tax,
+        tax_rate=Decimal(settings.TAX_RATE),
         total=totals.total,
         shipping_name=address.name,
         shipping_line1=address.line1,

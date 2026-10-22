@@ -14,6 +14,7 @@ import {
 import { AdminPageHeader } from "@/components/layout/AdminLayout";
 import { OrderHistoryList, OrderProgress } from "@/components/store/OrderTimeline";
 import { Button } from "@/components/ui/Button";
+import { InvoiceButton } from "@/components/store/InvoiceButton";
 import { Dialog } from "@/components/ui/Dialog";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { OrderStatusBadge, Pagination, ProductImage } from "@/components/ui/misc";
@@ -118,6 +119,11 @@ function OrderDrawer({ orderId, onClose }: { orderId: string | null; onClose: ()
                 <p className="mt-1 font-mono text-xs break-all text-muted">
                   {order.payment_provider} · {order.payment_reference || "none"}
                 </p>
+                {order.paid_at && (
+                  <div className="mt-2">
+                    <InvoiceButton size="sm" path={`/admin/orders/${order.id}/invoice/`} />
+                  </div>
+                )}
               </div>
               <div>
                 <h3 className="mb-2 text-[12px] font-medium text-muted">History</h3>
