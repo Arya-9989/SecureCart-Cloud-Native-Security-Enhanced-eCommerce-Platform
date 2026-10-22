@@ -12,6 +12,7 @@ the seed_demo accounts, adds items to the cart and places an order with the mock
 from __future__ import annotations
 
 import argparse
+import contextlib
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
@@ -24,10 +25,9 @@ MOBILE = {"width": 390, "height": 844}
 
 def settle(page: Page) -> None:
     page.wait_for_load_state("load")
-    try:
+    # Long-lived connections (e.g. a dev server's HMR socket) never go idle.
+    with contextlib.suppress(PlaywrightTimeout):
         page.wait_for_load_state("networkidle", timeout=8000)
-    except PlaywrightTimeout:
-        pass  # long-lived connections (e.g. a dev server's HMR socket) never go idle
     page.wait_for_timeout(500)
 
 
@@ -85,7 +85,9 @@ def storefront(base: str, browser, dark: bool = False) -> None:  # type: ignore[
 
 
 def mobile(base: str, browser) -> None:  # type: ignore[no-untyped-def]
-    ctx = browser.new_context(viewport=MOBILE, device_scale_factor=2, is_mobile=True, has_touch=True)
+    ctx = browser.new_context(
+        viewport=MOBILE, device_scale_factor=2, is_mobile=True, has_touch=True
+    )
     page = ctx.new_page()
     page.goto(base)
     shot(page, "mobile-home")
