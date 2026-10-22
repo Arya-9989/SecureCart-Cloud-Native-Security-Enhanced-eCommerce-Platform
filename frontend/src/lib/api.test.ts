@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { customer, server, session } from "@/test/server";
 
-import { ApiError, apiFetch, refreshSession, setSession } from "./api";
+import { ApiError, apiFetch, mayHaveSession, refreshSession, setSession } from "./api";
 
 describe("apiFetch", () => {
   it("sends the in-memory access token as a bearer header", async () => {
@@ -100,5 +100,33 @@ describe("apiFetch", () => {
   it("falls back to a friendly message for unexpected server errors", async () => {
     server.use(http.get("*/api/products/", () => new HttpResponse("boom", { status: 502 })));
     await expect(apiFetch("/products/")).rejects.toThrow(/went wrong on our side/);
+  });
+});
+
+describe("refreshSession", () => {
+  it.each([429, 503])(
+    "keeps the session hint when the refresh is only refused for now (%i)",
+    async (statusCode) => {
+      server.use(
+        http.post("*/api/auth/refresh/", () =>
+          HttpResponse.json({ error: { code: "x", message: "later" } }, { status: statusCode }),
+        ),
+      );
+      setSession("old");
+      expect(await refreshSession()).toBeNull();
+      // The cookie may still be valid; the next page load must try again.
+      expect(mayHaveSession()).toBe(true);
+    },
+  );
+
+  it("forgets the session when the server says it is over (401)", async () => {
+    server.use(
+      http.post("*/api/auth/refresh/", () =>
+        HttpResponse.json({ error: { code: "session_expired", message: "x" } }, { status: 401 }),
+      ),
+    );
+    setSession("old");
+    expect(await refreshSession()).toBeNull();
+    expect(mayHaveSession()).toBe(false);
   });
 });

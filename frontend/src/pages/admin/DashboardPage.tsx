@@ -30,12 +30,15 @@ import { useDocumentTitle } from "@/lib/useDocumentTitle";
  * crosshair tooltip on the line and per-bar tooltips; every value also reachable without
  * hovering (direct labels or the table view).
  */
-const compactMoney = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
+/** Axis ticks in the store's own currency (the API reports it), never a hard-coded one. */
+function compactMoney(currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+}
 const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 const axisTick = { fill: "var(--text-muted)", fontSize: 12, fontVariantNumeric: "tabular-nums" };
 
@@ -75,7 +78,11 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
-function RevenueTooltip({ active, payload }: Partial<TooltipContentProps<number, string>>) {
+function RevenueTooltip({
+  active,
+  payload,
+  currency,
+}: Partial<TooltipContentProps<number, string>> & { currency: string }) {
   const point = payload?.[0]?.payload as
     { date: string; revenue: number; orders: number } | undefined;
   if (!active || !point) return null;
@@ -84,7 +91,9 @@ function RevenueTooltip({ active, payload }: Partial<TooltipContentProps<number,
       <p className="text-[12px] text-muted">{shortDate.format(parseDay(point.date))}</p>
       <p className="mt-1 flex items-center gap-2">
         <span className="h-0.5 w-3 rounded-full bg-series-1" aria-hidden />
-        <span className="text-[15px] font-semibold tabular-nums">{formatMoney(point.revenue)}</span>
+        <span className="text-[15px] font-semibold tabular-nums">
+          {formatMoney(point.revenue, currency)}
+        </span>
       </p>
       <p className="mt-0.5 text-[12px] text-muted">
         {point.orders} order{point.orders === 1 ? "" : "s"}
@@ -128,14 +137,14 @@ function RevenueChart({ stats }: { stats: DashboardStats }) {
               tickMargin={8}
             />
             <YAxis
-              tickFormatter={(value: number) => compactMoney.format(value)}
+              tickFormatter={(value: number) => compactMoney(stats.currency).format(value)}
               tick={axisTick}
               tickLine={false}
               axisLine={false}
               width={52}
             />
             <Tooltip
-              content={<RevenueTooltip />}
+              content={<RevenueTooltip currency={stats.currency} />}
               cursor={{ stroke: "var(--line-strong)", strokeWidth: 1 }}
             />
             <Area
@@ -191,7 +200,7 @@ function RevenueChart({ stats }: { stats: DashboardStats }) {
                   <td className="px-3 py-1.5">{shortDate.format(parseDay(row.date))}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{row.orders}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
-                    {formatMoney(row.revenue)}
+                    {formatMoney(row.revenue, stats.currency)}
                   </td>
                 </tr>
               ))}

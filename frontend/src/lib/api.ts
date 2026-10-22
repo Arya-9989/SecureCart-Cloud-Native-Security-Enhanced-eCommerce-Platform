@@ -102,7 +102,13 @@ export function refreshSession(): Promise<User | null> {
         headers: { Accept: "application/json", "X-CSRF-Protection": "1" },
       });
       if (!response.ok) {
-        setSession(null);
+        if (response.status === 401 || response.status === 403) {
+          setSession(null); // the server ended the session: forget it
+        } else {
+          // Rate-limited or a server error: the cookie may still be good, so keep the hint
+          // and let the next page load try again instead of silently signing the user out.
+          accessToken = null;
+        }
         return null;
       }
       const data = (await response.json()) as TokenResponse;

@@ -261,6 +261,29 @@ describe("Checkout", () => {
     expect(keys[0]).not.toBe(keys[1]);
   });
 
+  it("never claims nothing was charged when the outcome is unknown", async () => {
+    const keys: (string | null)[] = [];
+    server.use(
+      http.post("*/api/checkout/", ({ request }) => {
+        keys.push(request.headers.get("Idempotency-Key"));
+        return HttpResponse.error(); // the connection dropped: did the charge happen?
+      }),
+    );
+    const { user } = await openCheckout();
+    await fillAddress(user);
+    await user.click(screen.getByRole("button", { name: /Place order/ }));
+    expect(await screen.findByText("We couldn't confirm your order.")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing was charged/)).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/can never be charged twice/);
+
+    // The retry repeats the same attempt: same key, so the server can answer with its result.
+    await user.click(screen.getByRole("button", { name: /Place order/ }));
+    await waitFor(() => {
+      expect(keys).toHaveLength(2);
+    });
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it("lists items that ran out of stock", async () => {
     server.use(
       http.post("*/api/checkout/", () =>

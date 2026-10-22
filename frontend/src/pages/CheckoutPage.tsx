@@ -35,6 +35,18 @@ const PAYMENT_METHODS = [
 
 type CheckoutForm = z.infer<typeof checkoutSchema>;
 
+/*
+ * What the shopper is told depends on what the server decided. A decline (402) or a stock
+ * conflict (409) is final: nothing was charged. A network failure or server error is NOT
+ * known to be final, so the page must not claim nothing happened; it says retrying is safe,
+ * which is true because the retry reuses this attempt's idempotency key.
+ */
+interface Problem {
+  kind: "declined" | "conflict" | "unknown";
+  message: string;
+  items?: StockProblem[];
+}
+
 interface StockProblem {
   product_id: number;
   name: string;
@@ -92,7 +104,7 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const idempotencyKey = useRef(newIdempotencyKey());
-  const [problem, setProblem] = useState<{ message: string; items?: StockProblem[] } | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   useDocumentTitle("Checkout");
 
   const form = useForm<CheckoutForm>({
@@ -124,10 +136,15 @@ export function CheckoutPage() {
         // The server reached a final decision for this key; the next attempt needs a new one.
         idempotencyKey.current = newIdempotencyKey();
         const items = (err.body as { error?: { items?: StockProblem[] } }).error?.items;
-        setProblem({ message: err.message, items: items?.length ? items : undefined });
+        setProblem({
+          kind: err.status === 402 ? "declined" : "conflict",
+          message: err.message,
+          items: items?.length ? items : undefined,
+        });
         void queryClient.invalidateQueries({ queryKey: keys.cart });
       } else if (!(err instanceof ApiError && err.status === 400)) {
-        setProblem({ message: errorMessage(err) });
+        // The key is kept, so pressing Place order again repeats this same attempt.
+        setProblem({ kind: "unknown", message: "We couldn't confirm your order." });
       }
     },
   });
@@ -207,9 +224,14 @@ export function CheckoutPage() {
                       </li>
                     ))}
                   </ul>
-                ) : (
+                ) : problem.kind === "declined" ? (
                   <p className="mt-1 text-fg">Nothing was charged and your bag is unchanged.</p>
-                )}
+                ) : problem.kind === "unknown" ? (
+                  <p className="mt-1 text-fg">
+                    {errorMessage(placeOrder.error)} Placing the order again is safe: it repeats
+                    this same attempt, so you can never be charged twice.
+                  </p>
+                ) : null}
                 {problem.items && (
                   <Link to="/cart" className="link mt-2 inline-block">
                     Review your bag
