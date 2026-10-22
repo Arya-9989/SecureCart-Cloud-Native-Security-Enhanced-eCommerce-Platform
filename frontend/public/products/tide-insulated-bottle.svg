@@ -1,25 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
 <defs>
-<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef7ff"/><stop offset="1" stop-color="#bfdcf7"/></linearGradient>
-<radialGradient id="spot" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
-<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
-<filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1e1b4b" flood-opacity="0.18"/></filter>
-<linearGradient id="steel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#0c4a6e"/></linearGradient><linearGradient id="cap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#334155"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
-</defs>
-<rect width="800" height="600" fill="url(#bg)"/>
-<rect width="800" height="600" fill="url(#spot)"/>
-<circle cx="660" cy="110" r="70" fill="#fff" opacity="0.28"/>
-<circle cx="130" cy="500" r="110" fill="#fff" opacity="0.18"/>
-<ellipse cx="400" cy="478" rx="110" ry="20" fill="#1e1b4b" opacity="0.16" filter="url(#soft)"/>
-<g filter="url(#lift)">
-
-<rect x="366" y="114" width="68" height="20" rx="8" fill="#1e293b"/>
-<path d="M372 112 C372 90 428 90 428 112" fill="none" stroke="#1e293b" stroke-width="10"/>
-<rect x="348" y="128" width="104" height="64" rx="14" fill="url(#cap)"/>
-<path d="M350 196 C350 216 330 222 330 250 V440 Q330 474 364 474 H436 Q470 474 470 440 V250 C470 222 450 216 450 196 Z" fill="url(#steel)"/>
-<rect x="330" y="300" width="140" height="46" fill="#082f49" opacity="0.25"/>
-<path d="M352 236 V440" stroke="#fff" stroke-opacity="0.35" stroke-width="12" stroke-linecap="round"/>
-<path d="M444 246 V430" stroke="#fff" stroke-opacity="0.12" stroke-width="6" stroke-linecap="round"/>
-
-</g>
+<linearGradient id="key" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/>
+<stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".24"/>
+</linearGradient>
+<linearGradient id="alu" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2f2f4"/><stop offset="0.35" stop-color="#d4d5d9"/><stop offset="0.55" stop-color="#e9e9ec"/><stop offset="1" stop-color="#a9abb1"/></linearGradient>
+<filter id="studio" filterUnits="userSpaceOnUse" x="60" y="40" width="680" height="520" color-interpolation-filters="sRGB">
+<feOffset in="SourceAlpha" dx="2" dy="2" result="a"/>
+<feComposite in="SourceAlpha" in2="a" operator="out" result="b"/>
+<feGaussianBlur in="b" stdDeviation="0.9" result="c"/>
+<feComposite in="c" in2="SourceAlpha" operator="in" result="d"/>
+<feFlood flood-color="#fff" flood-opacity=".42"/>
+<feComposite in2="d" operator="in" result="spec"/>
+<feOffset in="SourceAlpha" dx="-2.5" dy="-2.5" result="e"/>
+<feComposite in="SourceAlpha" in2="e" operator="out" result="f"/>
+<feGaussianBlur in="f" stdDeviation="2" result="g"/>
+<feComposite in="g" in2="SourceAlpha" operator="in" result="h"/>
+<feFlood flood-color="#cdd3dd" flood-opacity=".2"/>
+<feComposite in2="h" operator="in" result="rim"/>
+<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="spec"/><feMergeNode in="rim"/></feMerge>
+</filter>
+<filter id="contact" x="-15%" y="-300%" width="130%" height="700%"><feGaussianBlur stdDeviation="5"/></filter>
+<filter id="ambient" x="-30%" y="-300%" width="160%" height="700%"><feGaussianBlur stdDeviation="16"/></filter>
+<linearGradient id="coat" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#47789c"/><stop offset="0.22" stop-color="#7aa6c6"/><stop offset="0.62" stop-color="#47789c"/><stop offset="1" stop-color="#22455f"/></linearGradient><linearGradient id="cap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b3e46"/><stop offset="0.22" stop-color="#6a6e78"/><stop offset="0.62" stop-color="#3b3e46"/><stop offset="1" stop-color="#16171b"/></linearGradient></defs>
+<ellipse cx="400" cy="474" rx="74.79" ry="16" fill="#000" opacity=".13" filter="url(#ambient)"/>
+<ellipse cx="400" cy="471" rx="49.46" ry="6" fill="#000" opacity=".24" filter="url(#contact)"/>
+<g transform="translate(55.35 61.59) scale(0.86)"><g filter="url(#studio)">
+<path d="M372 112 C372 90 428 90 428 112" fill="none" stroke="#2a2c32" stroke-width="10"/>
+<rect x="366" y="112" width="68" height="20" rx="8" fill="#2a2c32"/>
+<rect x="348" y="128" width="104" height="64" rx="14" fill="url(#cap)"/><rect x="348" y="128" width="104" height="64" rx="14" fill="url(#key)"/>
+<rect x="350" y="188" width="100" height="10" rx="3" fill="url(#alu)"/>
+<path d="M350 198 C350 216 330 222 330 250 V440 Q330 474 364 474 H436 Q470 474 470 440 V250 C470 222 450 216 450 198 Z" fill="url(#coat)"/><path d="M350 198 C350 216 330 222 330 250 V440 Q330 474 364 474 H436 Q470 474 470 440 V250 C470 222 450 216 450 198 Z" fill="url(#key)"/>
+<path d="M352 238 V440" stroke="#fff" stroke-opacity=".3" stroke-width="11" stroke-linecap="round"/>
+<path d="M446 248 V430" stroke="#fff" stroke-opacity=".1" stroke-width="5" stroke-linecap="round"/>
+</g></g>
 </svg>

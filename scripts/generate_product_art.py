@@ -6,424 +6,609 @@ store ships without any licensing questions. Run from the repository root:
     python scripts/generate_product_art.py
 
 Output: frontend/public/products/<product-slug>.svg (800x600, 4:3).
+
+Studio model
+------------
+All eighteen pieces are lit and framed identically, as if shot in one session:
+
+* **Transparent canvas.** No backdrop is baked in. The storefront tile supplies the seamless
+  studio sweep (near-white in the light theme, graphite in the dark theme), so one file
+  works on both.
+* **One key light, upper left.** Materials use gradients that run light-to-dark from the
+  upper left (flat faces) or left-to-right (cylinders), and every major surface also gets the
+  shared ``#key`` overlay: a soft highlight top-left falling to a gentle core shadow
+  bottom-right.
+* **Shared silhouette filter** (``#studio``, a user-space region so strokes never clip): a crisp specular edge where the key light
+  grazes the top-left of the silhouette, and a faint rim light on the bottom-right edge so
+  dark objects still separate from a dark tile. It is built from offsets and composites
+  only (no lighting primitives), so it is cheap to rasterise.
+* **One ground.** Each drawing declares its bounding box; ``frame`` scales it to a common
+  visual mass and seats it on the same ground line, over a two-layer neutral shadow (a tight
+  contact shadow plus a broad ambient one).
+* **Materials over colour.** Anodised aluminium, matte graphite, ceramic, fabric, glass and
+  wood in slightly desaturated tones. Each product keeps its identity colour family. No
+  text, logos or brand marks.
 """
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "frontend" / "public" / "products"
 
-# Soft studio backdrops per category: (top-left, bottom-right, accent)
-BACKDROPS = {
-    "audio": ("#eef0ff", "#c9cffb", "#6366f1"),
-    "wearables": ("#fff1f1", "#fbcfd0", "#e11d48"),
-    "home": ("#fff8e8", "#f6dfae", "#d97706"),
-    "workspace": ("#ecfdf7", "#b5ecdc", "#0d9488"),
-    "travel": ("#eef7ff", "#bfdcf7", "#0284c7"),
-}
+# Canvas and framing.
+CANVAS_W, CANVAS_H = 800, 600
+CENTER_X = 400
+GROUND_Y = 470  # every product rests on this line
+MAX_W = 496  # ~62% of the canvas width
+MAX_H = 330
+TARGET_AREA = 124_000  # equal visual mass for wide, tall and square objects
 
 
-def lin(gid: str, c1: str, c2: str, x2: float = 0, y2: float = 1) -> str:
-    return (
-        f'<linearGradient id="{gid}" x1="0" y1="0" x2="{x2}" y2="{y2}">'
-        f'<stop offset="0" stop-color="{c1}"/><stop offset="1" stop-color="{c2}"/></linearGradient>'
-    )
+# --------------------------------------------------------------------------------------
+# Shared definitions
+# --------------------------------------------------------------------------------------
+def lin(gid: str, *stops: tuple[float, str], x2: float = 0, y2: float = 1) -> str:
+    """Linear gradient from (0,0) to (x2,y2) in object-bounding-box units."""
+    body = "".join(f'<stop offset="{o:g}" stop-color="{c}"/>' for o, c in stops)
+    return f'<linearGradient id="{gid}" x1="0" y1="0" x2="{x2:g}" y2="{y2:g}">{body}</linearGradient>'
 
 
-def rad(gid: str, c1: str, c2: str, cx: float = 0.35, cy: float = 0.3) -> str:
-    return (
-        f'<radialGradient id="{gid}" cx="{cx}" cy="{cy}" r="0.75">'
-        f'<stop offset="0" stop-color="{c1}"/><stop offset="1" stop-color="{c2}"/></radialGradient>'
-    )
+def rad(gid: str, *stops: tuple[float, str], cx: float = 0.36, cy: float = 0.3) -> str:
+    """Radial gradient whose hot spot sits towards the key light (upper left)."""
+    body = "".join(f'<stop offset="{o:g}" stop-color="{c}"/>' for o, c in stops)
+    return f'<radialGradient id="{gid}" cx="{cx:g}" cy="{cy:g}" r="0.78">{body}</radialGradient>'
 
 
-def frame(category: str, defs: str, body: str, shadow_rx: int = 190) -> str:
-    c1, c2, _ = BACKDROPS[category]
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
-<defs>
-{lin("bg", c1, c2, 1, 1)}
-<radialGradient id="spot" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
-<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
-<filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1e1b4b" flood-opacity="0.18"/></filter>
-{defs}
-</defs>
-<rect width="800" height="600" fill="url(#bg)"/>
-<rect width="800" height="600" fill="url(#spot)"/>
-<circle cx="660" cy="110" r="70" fill="#fff" opacity="0.28"/>
-<circle cx="130" cy="500" r="110" fill="#fff" opacity="0.18"/>
-<ellipse cx="400" cy="478" rx="{shadow_rx}" ry="20" fill="#1e1b4b" opacity="0.16" filter="url(#soft)"/>
-<g filter="url(#lift)">
-{body}
-</g>
-</svg>
+def cyl(gid: str, light: str, mid: str, dark: str) -> str:
+    """Horizontal shading for cylinders lit from the left."""
+    return lin(gid, (0, mid), (0.22, light), (0.62, mid), (1, dark), x2=1, y2=0)
+
+
+def flat(gid: str, light: str, dark: str) -> str:
+    """Diagonal shading for faces turned towards the key light."""
+    return lin(gid, (0, light), (1, dark), x2=0.55, y2=1)
+
+
+ALUMINIUM = lin(
+    "alu", (0, "#f2f2f4"), (0.35, "#d4d5d9"), (0.55, "#e9e9ec"), (1, "#a9abb1"), x2=1, y2=1
+)
+
+SHARED_DEFS = f"""
+<linearGradient id="key" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/>
+<stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".24"/>
+</linearGradient>
+{ALUMINIUM}
+<filter id="studio" filterUnits="userSpaceOnUse" x="60" y="40" width="680" height="520" color-interpolation-filters="sRGB">
+<feOffset in="SourceAlpha" dx="2" dy="2" result="a"/>
+<feComposite in="SourceAlpha" in2="a" operator="out" result="b"/>
+<feGaussianBlur in="b" stdDeviation="0.9" result="c"/>
+<feComposite in="c" in2="SourceAlpha" operator="in" result="d"/>
+<feFlood flood-color="#fff" flood-opacity=".42"/>
+<feComposite in2="d" operator="in" result="spec"/>
+<feOffset in="SourceAlpha" dx="-2.5" dy="-2.5" result="e"/>
+<feComposite in="SourceAlpha" in2="e" operator="out" result="f"/>
+<feGaussianBlur in="f" stdDeviation="2" result="g"/>
+<feComposite in="g" in2="SourceAlpha" operator="in" result="h"/>
+<feFlood flood-color="#cdd3dd" flood-opacity=".2"/>
+<feComposite in2="h" operator="in" result="rim"/>
+<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="spec"/><feMergeNode in="rim"/></feMerge>
+</filter>
+<filter id="contact" x="-15%" y="-300%" width="130%" height="700%"><feGaussianBlur stdDeviation="5"/></filter>
+<filter id="ambient" x="-30%" y="-300%" width="160%" height="700%"><feGaussianBlur stdDeviation="16"/></filter>
 """
+
+_FILL = re.compile(r'fill="[^"]*"')
+_STROKE = re.compile(r'stroke="[^"]*"')
+_DROP = re.compile(r'\s(?:opacity|fill-opacity|stroke-opacity|stroke-dasharray)="[^"]*"')
+
+
+def lit(element: str) -> str:
+    """Return ``element`` plus a copy shaded by the shared key light.
+
+    Filled shapes get the overlay as their fill; stroke-only shapes get it as their stroke.
+    """
+    overlay = _DROP.sub("", element)
+    if 'fill="none"' in overlay:
+        overlay = _STROKE.sub('stroke="url(#key)"', overlay)
+    else:
+        overlay = _STROKE.sub("", overlay)
+        overlay = _FILL.sub('fill="url(#key)"', overlay)
+    return element + overlay
+
+
+@dataclass(frozen=True)
+class Drawing:
+    """A product drawn in its own coordinates, with the box it occupies."""
+
+    defs: str
+    body: str
+    bbox: tuple[float, float, float, float]  # x0, y0, x1, y1 of the artwork
+    footprint: float = 0.82  # share of the drawn width that touches the ground
+
+
+def _n(value: float) -> str:
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def frame(drawing: Drawing) -> str:
+    """Seat a drawing on the shared ground line with the shared light and shadows."""
+    x0, y0, x1, y1 = drawing.bbox
+    w, h = x1 - x0, y1 - y0
+    scale = min(MAX_W / w, MAX_H / h, math.sqrt(TARGET_AREA / (w * h)))
+    tx = CENTER_X - (x0 + w / 2) * scale
+    ty = GROUND_Y - y1 * scale
+    width = w * scale
+    contact = width * drawing.footprint / 2
+    ambient = width * 0.62
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {CANVAS_W} {CANVAS_H}" '
+        f'width="{CANVAS_W}" height="{CANVAS_H}">\n<defs>{SHARED_DEFS}{drawing.defs}</defs>\n'
+        f'<ellipse cx="{CENTER_X}" cy="{GROUND_Y + 4}" rx="{_n(ambient)}" ry="16" '
+        f'fill="#000" opacity=".13" filter="url(#ambient)"/>\n'
+        f'<ellipse cx="{CENTER_X}" cy="{GROUND_Y + 1}" rx="{_n(contact)}" ry="6" '
+        f'fill="#000" opacity=".24" filter="url(#contact)"/>\n'
+        f'<g transform="translate({_n(tx)} {_n(ty)}) scale({_n(scale)})">'
+        f'<g filter="url(#studio)">{drawing.body}</g></g>\n</svg>\n'
+    )
 
 
 # --------------------------------------------------------------------------------------
 # Audio
 # --------------------------------------------------------------------------------------
-def headphones() -> str:
-    defs = lin("band", "#475569", "#1e293b") + lin("cup", "#334155", "#0f172a", 1, 1)
-    defs += lin("ring", "#a5b4fc", "#6366f1")
-    body = """
-<path d="M262 330 C262 140 538 140 538 330" fill="none" stroke="url(#band)" stroke-width="30" stroke-linecap="round"/>
-<path d="M300 236 C340 176 460 176 500 236" fill="none" stroke="#64748b" stroke-width="8" stroke-linecap="round" opacity="0.6"/>
-<rect x="232" y="296" width="62" height="40" rx="12" fill="#94a3b8"/>
-<rect x="506" y="296" width="62" height="40" rx="12" fill="#94a3b8"/>
-<rect x="206" y="318" width="104" height="150" rx="50" fill="url(#cup)"/>
-<rect x="490" y="318" width="104" height="150" rx="50" fill="url(#cup)"/>
-<rect x="296" y="332" width="30" height="122" rx="15" fill="#1e293b"/>
-<rect x="474" y="332" width="30" height="122" rx="15" fill="#1e293b"/>
-<ellipse cx="258" cy="393" rx="30" ry="44" fill="none" stroke="url(#ring)" stroke-width="6"/>
-<ellipse cx="542" cy="393" rx="30" ry="44" fill="none" stroke="url(#ring)" stroke-width="6"/>
-<path d="M226 350 C230 336 240 328 252 326" stroke="#fff" stroke-opacity="0.35" stroke-width="6" fill="none" stroke-linecap="round"/>
-<path d="M510 350 C514 336 524 328 536 326" stroke="#fff" stroke-opacity="0.35" stroke-width="6" fill="none" stroke-linecap="round"/>
+def headphones() -> Drawing:
+    defs = lin("band", (0, "#5a5f6c"), (1, "#24272f"))
+    defs += flat("cup", "#4a4f5d", "#16181e")
+    defs += lin("ring", (0, "#c9d1e4"), (1, "#6f7b98"), x2=1, y2=1)
+    defs += lin("slide", (0, "#d4d6db"), (0.5, "#a4a7ae"), (1, "#6f727a"), x2=0.6, y2=1)
+    body = f"""
+{lit('<path d="M262 330 C262 140 538 140 538 330" fill="none" stroke="url(#band)" stroke-width="30" stroke-linecap="round"/>')}
+<path d="M298 232 C340 176 460 176 502 232" fill="none" stroke="#7b8090" stroke-width="7" stroke-linecap="round" opacity=".55"/>
+{lit('<rect x="232" y="296" width="62" height="40" rx="12" fill="url(#slide)"/>')}
+{lit('<rect x="506" y="296" width="62" height="40" rx="12" fill="url(#slide)"/>')}
+{lit('<rect x="206" y="318" width="104" height="150" rx="50" fill="url(#cup)"/>')}
+{lit('<rect x="490" y="318" width="104" height="150" rx="50" fill="url(#cup)"/>')}
+<rect x="296" y="332" width="30" height="122" rx="15" fill="#1d1f25"/>
+<rect x="474" y="332" width="30" height="122" rx="15" fill="#1d1f25"/>
+<ellipse cx="258" cy="393" rx="30" ry="44" fill="none" stroke="url(#ring)" stroke-width="5"/>
+<ellipse cx="542" cy="393" rx="30" ry="44" fill="none" stroke="url(#ring)" stroke-width="5"/>
+<path d="M224 352 C228 336 240 328 254 326" stroke="#fff" stroke-opacity=".38" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M508 352 C512 336 524 328 538 326" stroke="#fff" stroke-opacity=".3" stroke-width="5" fill="none" stroke-linecap="round"/>
 """
-    return frame("audio", defs, body, 210)
+    return Drawing(defs, body, (206, 173, 594, 468), footprint=0.8)
 
 
-def speaker() -> str:
-    defs = lin("shell", "#14b8a6", "#0f766e", 1, 1) + lin("cap", "#5eead4", "#14b8a6")
+def speaker() -> Drawing:
+    defs = cyl("shell", "#86b2ab", "#5b8b84", "#2f5651") + lin("cap", (0, "#a9cbc5"), (1, "#5f8f88"))
     dots = "".join(
-        f'<circle cx="{x}" cy="{y}" r="4.5" fill="#0b4f49" opacity="0.55"/>'
+        f'<circle cx="{x}" cy="{y}" r="4.2" fill="#1e3d3a" opacity=".5"/>'
         for y in range(268, 430, 18)
         for x in range(316 + (9 if (y // 18) % 2 else 0), 486, 18)
     )
     body = f"""
-<path d="M372 170 C372 128 428 128 428 170" fill="none" stroke="#334155" stroke-width="12" stroke-linecap="round"/>
-<rect x="292" y="196" width="216" height="268" rx="70" fill="url(#shell)"/>
+{lit('<path d="M372 170 C372 128 428 128 428 170" fill="none" stroke="#3a3d45" stroke-width="12" stroke-linecap="round"/>')}
+{lit('<rect x="292" y="196" width="216" height="268" rx="70" fill="url(#shell)"/>')}
 <rect x="292" y="196" width="216" height="40" rx="20" fill="url(#cap)"/>
 <clipPath id="grille"><rect x="304" y="250" width="192" height="196" rx="56"/></clipPath>
 <g clip-path="url(#grille)">{dots}</g>
-<rect x="372" y="208" width="56" height="12" rx="6" fill="#0f766e" opacity="0.7"/>
-<path d="M316 280 C316 240 340 222 368 220" stroke="#fff" stroke-opacity="0.35" stroke-width="10" fill="none" stroke-linecap="round"/>
+<rect x="372" y="208" width="56" height="10" rx="5" fill="#2f5651" opacity=".6"/>
+<path d="M314 284 C314 244 336 226 364 222" stroke="#fff" stroke-opacity=".3" stroke-width="9" fill="none" stroke-linecap="round"/>
 """
-    return frame("audio", defs, body, 150)
+    return Drawing(defs, body, (292, 133, 508, 464), footprint=0.78)
 
 
-def earbuds() -> str:
-    defs = lin("case", "#ffffff", "#d7dbf3", 1, 1) + lin("bud", "#ffffff", "#c7cbe6", 1, 1)
-    body = """
-<rect x="240" y="300" width="250" height="160" rx="70" fill="url(#case)"/>
-<path d="M240 370 H490" stroke="#b8bde0" stroke-width="3"/>
-<path d="M252 330 C262 250 470 250 480 330 Z" fill="#eceefb" transform="rotate(-18 250 330)"/>
-<circle cx="365" cy="420" r="6" fill="#22c55e"/>
-<g transform="translate(470 210) rotate(18)">
-  <ellipse cx="40" cy="40" rx="40" ry="36" fill="url(#bud)"/>
-  <ellipse cx="22" cy="40" rx="14" ry="16" fill="#334155"/>
-  <rect x="44" y="52" width="26" height="120" rx="13" fill="url(#bud)"/>
-</g>
-<g transform="translate(520 300) rotate(-8)">
-  <ellipse cx="40" cy="40" rx="40" ry="36" fill="url(#bud)"/>
-  <ellipse cx="58" cy="40" rx="14" ry="16" fill="#334155"/>
-  <rect x="10" y="52" width="26" height="120" rx="13" fill="url(#bud)"/>
-</g>
+def _bud(cx: float, cy: float, r: float, tip_side: int) -> str:
+    """A stemless, pebble-shaped in-ear bud with its silicone ear tip on one side."""
+    tx, ty = cx + tip_side * r * 0.78, cy - r * 0.5
+    tilt = -12 * tip_side
+    shell = (
+        f'<ellipse cx="{cx}" cy="{cy}" rx="{r * 1.1:.1f}" ry="{r * 0.9:.1f}" '
+        f'fill="url(#budshell)" transform="rotate({tilt} {cx} {cy})"/>'
+    )
+    tip = (
+        f'<ellipse cx="{tx:.1f}" cy="{ty:.1f}" rx="{r * 0.5:.1f}" ry="{r * 0.42:.1f}" '
+        f'fill="url(#tip)" transform="rotate({tilt * 2} {tx:.1f} {ty:.1f})"/>'
+    )
+    px, py = cx - tip_side * r * 0.06, cy + r * 0.02
+    return f"""
+{lit(tip)}
+<ellipse cx="{tx + tip_side * r * 0.14:.1f}" cy="{ty - r * 0.06:.1f}" rx="{r * 0.17:.1f}" ry="{r * 0.13:.1f}" fill="#3a3c42"/>
+{lit(shell)}
+<ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{r * 0.62:.1f}" ry="{r * 0.5:.1f}" fill="url(#pad)" stroke="#8a8d95" stroke-opacity=".35" stroke-width="1.5" transform="rotate({tilt} {px:.1f} {py:.1f})"/>
+<path d="M{cx - r * 0.82:.1f} {cy - r * 0.1:.1f} A{r * 0.9:.1f} {r * 0.75:.1f} 0 0 1 {cx - r * 0.2:.1f} {cy - r * 0.74:.1f}" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3" stroke-linecap="round"/>
 """
-    return frame("audio", defs, body, 200)
 
 
-def turntable() -> str:
-    defs = lin("wood", "#b45309", "#78350f", 1, 1) + rad("vinyl", "#3f3f46", "#09090b", 0.4, 0.35)
+def earbuds() -> Drawing:
+    defs = flat("stone", "#f1eee9", "#b7b1a7") + flat("charcoal", "#55585f", "#24262b")
+    defs += lin("tip", (0, "#b8bbc2"), (1, "#767981"))
+    defs += flat("budshell", "#5d6068", "#1f2125") + flat("pad", "#4a4d55", "#2c2e33")
+    defs += (
+        '<pattern id="weave" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">'
+        '<path d="M0 0 V5" stroke="#fff" stroke-opacity=".06" stroke-width="2"/></pattern>'
+    )
+    # A wide, low case: matte stone base with a fabric-wrapped charcoal lid.
+    body = f"""
+{lit('<rect x="186" y="328" width="320" height="134" rx="46" fill="url(#stone)"/>')}
+<clipPath id="lidclip"><rect x="186" y="328" width="320" height="134" rx="46"/></clipPath>
+<g clip-path="url(#lidclip)">
+<rect x="186" y="328" width="320" height="58" fill="url(#charcoal)"/>
+<rect x="186" y="328" width="320" height="58" fill="url(#weave)"/>
+<rect x="186" y="384" width="320" height="3" fill="#1b1c20" opacity=".55"/>
+</g>
+<rect x="326" y="420" width="40" height="5" rx="2.5" fill="#8a857c" opacity=".55"/>
+<circle cx="480" cy="422" r="3.5" fill="#6fbf86"/>
+<path d="M214 352 C220 340 232 334 248 333" stroke="#fff" stroke-opacity=".35" stroke-width="4" fill="none" stroke-linecap="round"/>
+{_bud(522, 422, 44, -1)}
+{_bud(610, 431, 34, 1)}
+"""
+    return Drawing(defs, body, (186, 328, 654, 462), footprint=0.9)
+
+
+def turntable() -> Drawing:
+    defs = flat("wood", "#9a6b48", "#4f3322") + rad("vinyl", (0, "#3a3a3e"), (1, "#0c0c0e"))
     grooves = "".join(
-        f'<circle cx="350" cy="330" r="{r}" fill="none" stroke="#52525b" stroke-width="1.2" opacity="0.7"/>'
+        f'<circle cx="350" cy="330" r="{r}" fill="none" stroke="#4a4a50" stroke-width="1" opacity=".7"/>'
         for r in range(46, 118, 9)
     )
     body = f"""
-<rect x="196" y="214" width="408" height="236" rx="22" fill="url(#wood)"/>
-<rect x="196" y="420" width="408" height="30" rx="12" fill="#5b2a0a" opacity="0.6"/>
-<circle cx="350" cy="330" r="124" fill="#d4d4d8"/>
+{lit('<rect x="196" y="214" width="408" height="236" rx="22" fill="url(#wood)"/>')}
+<rect x="196" y="424" width="408" height="26" rx="12" fill="#3a2418" opacity=".55"/>
+<circle cx="350" cy="330" r="124" fill="url(#alu)"/>
 <circle cx="350" cy="330" r="118" fill="url(#vinyl)"/>
 {grooves}
-<circle cx="350" cy="330" r="34" fill="#ef4444"/>
-<circle cx="350" cy="330" r="6" fill="#e4e4e7"/>
-<path d="M300 260 A80 80 0 0 1 380 250" stroke="#fff" stroke-opacity="0.18" stroke-width="10" fill="none"/>
-<circle cx="540" cy="256" r="20" fill="#e4e4e7"/><circle cx="540" cy="256" r="8" fill="#a1a1aa"/>
-<path d="M540 256 L520 380 L452 396" fill="none" stroke="#e4e4e7" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="428" y="384" width="34" height="22" rx="4" fill="#27272a" transform="rotate(-14 445 395)"/>
-<circle cx="560" cy="414" r="9" fill="#fbbf24"/>
-<rect x="216" y="450" width="40" height="14" rx="4" fill="#3f1d06"/>
-<rect x="544" y="450" width="40" height="14" rx="4" fill="#3f1d06"/>
+<circle cx="350" cy="330" r="34" fill="#b44a3f"/>
+<circle cx="350" cy="330" r="5" fill="#e6e6ea"/>
+<path d="M296 262 A82 82 0 0 1 384 250" stroke="#fff" stroke-opacity=".16" stroke-width="12" fill="none"/>
+<circle cx="540" cy="256" r="20" fill="url(#alu)"/><circle cx="540" cy="256" r="7" fill="#8e9097"/>
+<path d="M540 256 L520 380 L452 396" fill="none" stroke="#dcdde1" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="428" y="384" width="34" height="22" rx="4" fill="#2a2a2e" transform="rotate(-14 445 395)"/>
+<circle cx="562" cy="414" r="8" fill="url(#alu)"/>
+<rect x="216" y="450" width="40" height="12" rx="4" fill="#2b1a10"/>
+<rect x="544" y="450" width="40" height="12" rx="4" fill="#2b1a10"/>
 """
-    return frame("audio", defs, body, 220)
+    return Drawing(defs, body, (196, 206, 604, 462), footprint=0.95)
 
 
 # --------------------------------------------------------------------------------------
 # Wearables
 # --------------------------------------------------------------------------------------
-def smartwatch() -> str:
-    defs = lin("strap", "#475569", "#1e293b") + lin("case", "#f1f5f9", "#94a3b8", 1, 1)
-    defs += rad("screen", "#1e293b", "#020617", 0.4, 0.3)
-    body = """
-<rect x="338" y="120" width="124" height="150" rx="26" fill="url(#strap)"/>
-<rect x="338" y="330" width="124" height="160" rx="26" fill="url(#strap)"/>
-<circle cx="400" cy="460" r="7" fill="#0f172a"/><circle cx="400" cy="434" r="7" fill="#0f172a"/>
-<rect x="312" y="196" width="176" height="208" rx="54" fill="url(#case)"/>
-<rect x="488" y="262" width="14" height="44" rx="7" fill="#cbd5e1"/>
+def smartwatch() -> Drawing:
+    defs = cyl("strap", "#575d6b", "#3a3f4b", "#1c1f26") + rad("screen", (0, "#20232b"), (1, "#050507"))
+    body = f"""
+{lit('<rect x="338" y="120" width="124" height="150" rx="26" fill="url(#strap)"/>')}
+{lit('<rect x="338" y="330" width="124" height="140" rx="26" fill="url(#strap)"/>')}
+<circle cx="400" cy="440" r="6" fill="#121418"/><circle cx="400" cy="416" r="6" fill="#121418"/>
+{lit('<rect x="312" y="196" width="176" height="208" rx="54" fill="url(#alu)"/>')}
+<rect x="486" y="262" width="14" height="44" rx="7" fill="url(#alu)"/>
 <rect x="326" y="210" width="148" height="180" rx="44" fill="url(#screen)"/>
-<circle cx="400" cy="300" r="58" fill="none" stroke="#3f1220" stroke-width="12"/>
-<circle cx="400" cy="300" r="58" fill="none" stroke="#f43f5e" stroke-width="12" stroke-dasharray="270 400" stroke-linecap="round" transform="rotate(-90 400 300)"/>
-<circle cx="400" cy="300" r="42" fill="none" stroke="#1a3b16" stroke-width="12"/>
-<circle cx="400" cy="300" r="42" fill="none" stroke="#84cc16" stroke-width="12" stroke-dasharray="170 400" stroke-linecap="round" transform="rotate(-90 400 300)"/>
-<circle cx="400" cy="300" r="26" fill="none" stroke="#0b3446" stroke-width="12"/>
-<circle cx="400" cy="300" r="26" fill="none" stroke="#22d3ee" stroke-width="12" stroke-dasharray="120 400" stroke-linecap="round" transform="rotate(-90 400 300)"/>
-<path d="M342 236 C352 222 370 216 390 216" stroke="#fff" stroke-opacity="0.25" stroke-width="6" fill="none" stroke-linecap="round"/>
+{dial()}
+<path d="M340 238 C350 224 368 216 388 215" stroke="#fff" stroke-opacity=".22" stroke-width="5" fill="none" stroke-linecap="round"/>
 """
-    return frame("wearables", defs, body, 150)
+    return Drawing(defs, body, (312, 120, 500, 470), footprint=0.62)
 
 
-def fitness_band() -> str:
-    defs = lin("band", "#fb7185", "#be123c", 1, 1)
-    body = """
-<ellipse cx="400" cy="330" rx="190" ry="110" fill="none" stroke="url(#band)" stroke-width="44"/>
-<ellipse cx="400" cy="330" rx="190" ry="110" fill="none" stroke="#fff" stroke-opacity="0.2" stroke-width="6" stroke-dasharray="40 30"/>
-<g transform="rotate(-6 400 220)">
-  <rect x="318" y="182" width="164" height="78" rx="38" fill="#0f172a"/>
-  <rect x="330" y="194" width="140" height="54" rx="27" fill="#111827" stroke="#334155" stroke-width="2"/>
-  <path d="M352 222 h14 l8 -14 l10 26 l8 -12 h20" fill="none" stroke="#4ade80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="424" y="210" width="30" height="7" rx="3.5" fill="#4ade80" opacity="0.8"/>
-  <rect x="424" y="224" width="20" height="7" rx="3.5" fill="#4ade80" opacity="0.5"/>
+def dial() -> str:
+    """A plain analog watch face: twelve indices, two hands and a seconds hand."""
+    ticks = "".join(
+        f'<rect x="398.5" y="{232 if i % 3 == 0 else 236}" width="3" height="{14 if i % 3 == 0 else 8}" '
+        f'rx="1.5" fill="#e9eaee" opacity="{1 if i % 3 == 0 else 0.55}" transform="rotate({i * 30} 400 300)"/>'
+        for i in range(12)
+    )
+    return (
+        f"{ticks}"
+        '<rect x="397" y="262" width="6" height="42" rx="3" fill="#f2f2f4" transform="rotate(-50 400 300)"/>'
+        '<rect x="397.5" y="244" width="5" height="60" rx="2.5" fill="#f2f2f4" transform="rotate(64 400 300)"/>'
+        '<rect x="399.2" y="240" width="1.6" height="72" rx=".8" fill="#e07a4a" transform="rotate(152 400 300)"/>'
+        '<circle cx="400" cy="300" r="5" fill="#f2f2f4"/><circle cx="400" cy="300" r="2.2" fill="#e07a4a"/>'
+    )
+
+
+def fitness_band() -> Drawing:
+    """The loop seen from ~30 degrees above: a short open cylinder with its tracker in front."""
+    cx, cy, rx, ry, height, wall = 400, 300, 200, 86, 46, 12
+    irx, iry = rx - wall, ry - wall * ry / rx
+    defs = cyl("bandw", "#e2a1aa", "#c46f7c", "#87394a")
+    defs += lin("bandi", (0, "#7c3343"), (1, "#b0606f"))
+    defs += flat("pod", "#43464f", "#121318")
+    defs += (
+        f'<clipPath id="toph"><ellipse cx="{cx}" cy="{cy}" rx="{irx}" ry="{iry:.1f}"/></clipPath>'
+        f'<mask id="loop" maskUnits="userSpaceOnUse" x="0" y="0" width="800" height="600">'
+        f'<rect width="800" height="600" fill="#fff"/>'
+        f'<ellipse cx="{cx}" cy="{cy + height}" rx="{irx}" ry="{iry:.1f}" fill="#000" clip-path="url(#toph)"/>'
+        f"</mask>"
+    )
+    silhouette = (
+        f'<path d="M{cx - rx} {cy} A{rx} {ry} 0 0 1 {cx + rx} {cy} V{cy + height} '
+        f'A{rx} {ry} 0 0 1 {cx - rx} {cy + height} Z" fill="url(#bandw)"/>'
+    )
+    body = f"""
+<g mask="url(#loop)">
+{lit(silhouette)}
+<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="#e6b0b8"/>
+<ellipse cx="{cx}" cy="{cy}" rx="{irx}" ry="{iry:.1f}" fill="url(#bandi)"/>
+<path d="M{cx - rx + 2} {cy + height / 2} A{rx - 2} {ry} 0 0 0 {cx + rx - 2} {cy + height / 2}" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="2" stroke-dasharray="30 22"/>
 </g>
+{lit('<rect x="326" y="368" width="148" height="70" rx="32" fill="url(#pod)"/>')}
+<rect x="338" y="380" width="124" height="46" rx="23" fill="#0d0e12" stroke="#3a3d46" stroke-width="2"/>
+<path d="M356 404 h12 l7 -12 l9 22 l7 -10 h16" fill="none" stroke="#6fd093" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="418" y="394" width="26" height="5" rx="2.5" fill="#6fd093" opacity=".8"/>
+<rect x="418" y="406" width="17" height="5" rx="2.5" fill="#6fd093" opacity=".45"/>
+<path d="M342 376 C352 371 364 370 378 370" stroke="#fff" stroke-opacity=".35" stroke-width="3.5" fill="none" stroke-linecap="round"/>
 """
-    return frame("wearables", defs, body, 200)
+    return Drawing(defs, body, (200, 214, 600, 438), footprint=0.78)
 
 
-def sunglasses() -> str:
-    defs = lin("lens", "#334155", "#0f172a", 1, 1) + lin("frame", "#7c2d12", "#431407", 1, 1)
-    defs += lin("shine", "#ffffff", "#ffffff00", 1, 1)
-    body = """
-<path d="M196 262 L150 236" stroke="url(#frame)" stroke-width="14" stroke-linecap="round"/>
-<path d="M604 262 L650 236" stroke="url(#frame)" stroke-width="14" stroke-linecap="round"/>
-<path d="M202 252 Q300 232 372 256 Q382 344 318 384 Q238 400 214 346 Q196 300 202 252 Z" fill="url(#lens)" stroke="url(#frame)" stroke-width="16" stroke-linejoin="round"/>
-<path d="M598 252 Q500 232 428 256 Q418 344 482 384 Q562 400 586 346 Q604 300 598 252 Z" fill="url(#lens)" stroke="url(#frame)" stroke-width="16" stroke-linejoin="round"/>
-<path d="M372 262 Q400 240 428 262" fill="none" stroke="url(#frame)" stroke-width="14" stroke-linecap="round"/>
-<path d="M236 280 Q270 266 310 270 L250 350 Q228 320 236 280 Z" fill="url(#shine)" opacity="0.28"/>
-<path d="M462 280 Q500 266 540 270 L476 350 Q454 320 462 280 Z" fill="url(#shine)" opacity="0.28"/>
+def sunglasses() -> Drawing:
+    defs = lin("lens", (0, "#4a5262"), (0.55, "#20242d"), (1, "#0e1015"), x2=0.4, y2=1)
+    defs += flat("frame", "#8a5634", "#3a2114")
+    body = f"""
+<path d="M196 262 L150 236" stroke="#4d2c1a" stroke-width="13" stroke-linecap="round"/>
+<path d="M604 262 L650 236" stroke="#4d2c1a" stroke-width="13" stroke-linecap="round"/>
+{lit('<path d="M202 252 Q300 232 372 256 Q382 344 318 384 Q238 400 214 346 Q196 300 202 252 Z" fill="url(#lens)" stroke="url(#frame)" stroke-width="15" stroke-linejoin="round"/>')}
+{lit('<path d="M598 252 Q500 232 428 256 Q418 344 482 384 Q562 400 586 346 Q604 300 598 252 Z" fill="url(#lens)" stroke="url(#frame)" stroke-width="15" stroke-linejoin="round"/>')}
+<path d="M372 262 Q400 240 428 262" fill="none" stroke="url(#frame)" stroke-width="13" stroke-linecap="round"/>
+<path d="M232 278 Q268 264 306 268 L248 346 Q226 318 232 278 Z" fill="#fff" opacity=".13"/>
+<path d="M458 278 Q496 264 536 268 L476 346 Q454 318 458 278 Z" fill="#fff" opacity=".13"/>
+<path d="M214 258 Q290 240 360 258" stroke="#d7a27a" stroke-opacity=".55" stroke-width="3" fill="none" stroke-linecap="round"/>
 """
-    return frame("wearables", defs, body, 230)
+    return Drawing(defs, body, (143, 229, 657, 395), footprint=0.66)
 
 
 # --------------------------------------------------------------------------------------
 # Home & living
 # --------------------------------------------------------------------------------------
-def lamp() -> str:
-    defs = rad("globe", "#fffbea", "#fcd58a", 0.45, 0.4) + lin("brass", "#fcd34d", "#b45309", 1, 0)
-    defs += '<radialGradient id="halo" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fde68a" stop-opacity="0.9"/><stop offset="1" stop-color="#fde68a" stop-opacity="0"/></radialGradient>'
-    body = """
-<circle cx="400" cy="236" r="170" fill="url(#halo)"/>
-<circle cx="400" cy="236" r="104" fill="url(#globe)"/>
-<ellipse cx="366" cy="196" rx="34" ry="22" fill="#fff" opacity="0.6"/>
-<rect x="388" y="336" width="24" height="96" rx="8" fill="url(#brass)"/>
+def lamp() -> Drawing:
+    defs = rad("globe", (0, "#fffdf7"), (0.55, "#f8ebcd"), (1, "#dcc08a"), cx=0.4, cy=0.36)
+    defs += cyl("brass", "#f0d89c", "#c9a560", "#8a6430")
+    defs += lin("base", (0, "#e2c482"), (1, "#7c5a2a"))
+    body = f"""
+{lit('<circle cx="400" cy="236" r="104" fill="url(#globe)"/>')}
+<ellipse cx="364" cy="194" rx="30" ry="19" fill="#fff" opacity=".7"/>
+<rect x="388" y="336" width="24" height="98" rx="8" fill="url(#brass)"/>
 <rect x="370" y="326" width="60" height="18" rx="9" fill="url(#brass)"/>
-<ellipse cx="400" cy="450" rx="96" ry="22" fill="#92400e"/>
-<rect x="304" y="432" width="192" height="20" rx="10" fill="url(#brass)"/>
+{lit('<ellipse cx="400" cy="452" rx="96" ry="20" fill="url(#base)"/>')}
+{lit('<rect x="304" y="432" width="192" height="20" rx="10" fill="url(#brass)"/>')}
 """
-    return frame("home", defs, body, 140)
+    return Drawing(defs, body, (296, 132, 504, 472), footprint=0.85)
 
 
-def mug(x: int, color1: str, color2: str, gid: str, flip: bool = False) -> str:
-    handle_x = x + 150 if not flip else x - 46
+def _mug(x: int, gid: str, glaze: str, rim: str, *, flip: bool = False) -> str:
+    # The handle springs from the mug wall: the right wall, or the left one when flipped.
+    wall = x + 4 if flip else x + 164
+    reach = wall - 62 if flip else wall + 62
+    handle = (
+        f'<path d="M{wall} 300 C{reach} 300 {reach} 390 {wall} 390" '
+        f'fill="none" stroke="url(#{gid})" stroke-width="22" stroke-linecap="round"/>'
+    )
+    body = f'<path d="M{x} 250 h168 v168 q0 44 -44 44 h-80 q-44 0 -44 -44 Z" fill="url(#{gid})"/>'
     return f"""
-<path d="M{handle_x + 18} 300 C{handle_x + (64 if not flip else -28)} 300 {handle_x + (64 if not flip else -28)} 390 {handle_x + 18} 390" fill="none" stroke="url(#{gid})" stroke-width="22" stroke-linecap="round"/>
-<path d="M{x} 250 h168 v168 q0 44 -44 44 h-80 q-44 0 -44 -44 Z" fill="url(#{gid})"/>
-<ellipse cx="{x + 84}" cy="250" rx="84" ry="18" fill="{color2}"/>
-<ellipse cx="{x + 84}" cy="252" rx="72" ry="12" fill="#3b1d0e"/>
-<path d="M{x} 262 q20 30 40 4 q20 32 44 2 q24 30 44 0 q22 28 40 0 v-12 h-168 Z" fill="{color1}" opacity="0.9"/>
-<path d="M{x + 20} 300 v110" stroke="#fff" stroke-opacity="0.25" stroke-width="10" stroke-linecap="round"/>
+{lit(handle)}
+{lit(body)}
+<path d="M{x} 262 q20 28 40 4 q20 30 44 2 q24 28 44 0 q22 26 40 0 v-12 h-168 Z" fill="{glaze}" opacity=".92"/>
+<ellipse cx="{x + 84}" cy="250" rx="84" ry="17" fill="{rim}"/>
+<ellipse cx="{x + 84}" cy="252" rx="72" ry="11" fill="#2f1d12"/>
+<path d="M{x + 18} 298 v110" stroke="#fff" stroke-opacity=".22" stroke-width="9" stroke-linecap="round"/>
 """
 
 
-def mug_set() -> str:
-    defs = lin("terra", "#e07a4f", "#9a3412", 1, 1) + lin("sage", "#9cbf9b", "#4d7c55", 1, 1)
-    body = mug(178, "#f5d0b8", "#c2603a", "terra", flip=True) + mug(452, "#e2efe1", "#6c9a70", "sage")
-    return frame("home", defs, body, 240)
+def mug_set() -> Drawing:
+    defs = cyl("terra", "#d9906e", "#bb6a49", "#7f3a22") + cyl("sage", "#bcd0b9", "#93b190", "#5a7a5d")
+    body = _mug(178, "terra", "#f1d9c8", "#b9694a", flip=True) + _mug(
+        452, "sage", "#eef3ec", "#88a586"
+    )
+    return Drawing(defs, body, (125, 233, 674, 462), footprint=0.9)
 
 
-def planter() -> str:
-    defs = lin("pot", "#e0855c", "#9a3412", 1, 0) + lin("leaf", "#4ade80", "#15803d", 1, 1)
+def planter() -> Drawing:
+    defs = cyl("pot", "#d78c69", "#b8673f", "#7d3a1d")
+    defs += lin("leaf", (0, "#8db884"), (1, "#3f6a3d"), x2=1, y2=1)
+    defs += '<ellipse id="lf" rx="18" ry="7" fill="url(#leaf)"/>'
     leaves = ""
-    for angle, length in [(-62, 170), (-38, 200), (-14, 215), (12, 210), (36, 195), (60, 165), (-80, 130), (80, 130)]:
+    stems = [(-62, 170), (-38, 200), (-14, 215), (12, 210), (36, 195), (60, 165), (-80, 130), (80, 130)]
+    for angle, length in stems:
         leaflets = "".join(
-            f'<ellipse cx="{side * 16}" cy="{-t}" rx="18" ry="7" fill="url(#leaf)" transform="rotate({side * -35} {side * 16} {-t})"/>'
+            f'<use href="#lf" transform="translate({side * 16} {-t}) rotate({side * -35})"/>'
             for t in range(36, length - 10, 22)
             for side in (-1, 1)
         )
         leaves += (
             f'<g transform="translate(400 300) rotate({angle})">'
-            f'<path d="M0 0 V{-length}" stroke="#166534" stroke-width="4"/>{leaflets}</g>'
+            f'<path d="M0 0 V{-length}" stroke="#3f6a3a" stroke-width="4"/>{leaflets}</g>'
         )
     body = f"""
 {leaves}
-<path d="M300 300 h200 l-22 160 q-4 16 -20 16 h-116 q-16 0 -20 -16 Z" fill="url(#pot)"/>
-<rect x="286" y="286" width="228" height="40" rx="10" fill="#c2410c"/>
-<rect x="286" y="286" width="228" height="12" rx="6" fill="#fb923c" opacity="0.6"/>
-<path d="M330 340 l14 110" stroke="#fff" stroke-opacity="0.2" stroke-width="12" stroke-linecap="round"/>
+{lit('<path d="M300 300 h200 l-22 160 q-4 16 -20 16 h-116 q-16 0 -20 -16 Z" fill="url(#pot)"/>')}
+{lit('<rect x="286" y="286" width="228" height="40" rx="10" fill="url(#pot)"/>')}
+<rect x="290" y="288" width="220" height="9" rx="4.5" fill="#f0b496" opacity=".45"/>
+<path d="M326 340 l12 108" stroke="#fff" stroke-opacity=".18" stroke-width="11" stroke-linecap="round"/>
 """
-    return frame("home", defs, body, 140)
+    return Drawing(defs, body, (232, 80, 562, 476), footprint=0.42)
 
 
-def candle() -> str:
-    defs = lin("jar", "#fbbf24cc", "#b45309dd", 1, 1) + lin("wax", "#fffbeb", "#fde68a")
-    defs += '<radialGradient id="flame" cx="0.5" cy="0.7" r="0.6"><stop offset="0" stop-color="#fff7d6"/><stop offset="0.5" stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></radialGradient>'
-    defs += '<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#fde68a" stop-opacity="0.8"/><stop offset="1" stop-color="#fde68a" stop-opacity="0"/></radialGradient>'
-    body = """
-<circle cx="400" cy="220" r="110" fill="url(#glow)"/>
+def candle() -> Drawing:
+    defs = lin("jar", (0, "#e7b06a"), (0.25, "#f2c88a"), (0.65, "#c88843"), (1, "#7d4a1d"), x2=1, y2=0)
+    defs += lin("wax", (0, "#fffaf0"), (1, "#f0dfb8"))
+    defs += (
+        '<radialGradient id="flame" cx="0.5" cy="0.72" r="0.6"><stop offset="0" stop-color="#fffbe9"/>'
+        '<stop offset="0.5" stop-color="#f9cf6a"/><stop offset="1" stop-color="#ec8a3a"/></radialGradient>'
+    )
+    body = f"""
 <path d="M400 168 C384 196 384 224 400 236 C416 224 416 196 400 168 Z" fill="url(#flame)"/>
-<path d="M400 236 v26" stroke="#292524" stroke-width="4" stroke-linecap="round"/>
-<rect x="296" y="250" width="208" height="214" rx="30" fill="url(#jar)"/>
-<rect x="306" y="262" width="188" height="40" rx="18" fill="url(#wax)"/>
-<rect x="320" y="330" width="160" height="92" rx="10" fill="#fffbeb"/>
-<text x="400" y="370" text-anchor="middle" font-family="Georgia, serif" font-size="26" fill="#78350f">EMBER</text>
-<text x="400" y="400" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" letter-spacing="3" fill="#a16207">CEDAR · AMBER</text>
-<path d="M316 290 v150" stroke="#fff" stroke-opacity="0.3" stroke-width="10" stroke-linecap="round"/>
+<path d="M400 236 v24" stroke="#2a2522" stroke-width="4" stroke-linecap="round"/>
+{lit('<rect x="296" y="250" width="208" height="214" rx="30" fill="url(#jar)" opacity=".96"/>')}
+<rect x="306" y="262" width="188" height="38" rx="17" fill="url(#wax)"/>
+<rect x="322" y="330" width="156" height="90" rx="8" fill="#f3ebdc"/>
+<rect x="346" y="358" width="108" height="5" rx="2.5" fill="#a88b62" opacity=".55"/>
+<rect x="364" y="374" width="72" height="4" rx="2" fill="#a88b62" opacity=".35"/>
+<rect x="346" y="390" width="108" height="1.5" fill="#a88b62" opacity=".4"/>
+<path d="M316 292 v150" stroke="#fff" stroke-opacity=".32" stroke-width="10" stroke-linecap="round"/>
+<path d="M484 300 v130" stroke="#fff" stroke-opacity=".12" stroke-width="5" stroke-linecap="round"/>
 """
-    return frame("home", defs, body, 150)
+    return Drawing(defs, body, (296, 168, 504, 464), footprint=0.82)
 
 
 # --------------------------------------------------------------------------------------
 # Workspace
 # --------------------------------------------------------------------------------------
-def keyboard() -> str:
-    defs = lin("case", "#334155", "#0f172a", 1, 1) + lin("key", "#f8fafc", "#cbd5e1")
-    defs += lin("accent", "#2dd4bf", "#0d9488")
+def keyboard() -> Drawing:
+    defs = flat("case", "#62666f", "#25272c") + lin("kc", (0, "#fbfbfc"), (1, "#d3d5db"))
+    defs += lin("acc", (0, "#80b8af"), (1, "#3f7b72"))
+    defs += (
+        '<filter id="keyshade" x="-2%" y="-2%" width="104%" height="108%">'
+        '<feDropShadow dx="0" dy="2.5" stdDeviation="0.6" flood-color="#000" flood-opacity=".45"/></filter>'
+    )
     keys = []
     rows = [(14, 0), (14, 6), (13, 12), (12, 20)]
     unit, gap, x0, y0 = 28, 6, 165, 234
     for r, (count, offset) in enumerate(rows):
         for c in range(count):
-            fill = "url(#accent)" if (r == 0 and c == 0) or (r == 2 and c == count - 1) else "url(#key)"
+            accent = (r == 0 and c == 0) or (r == 2 and c == count - 1)
             keys.append(
                 f'<rect x="{x0 + offset + c * (unit + gap)}" y="{y0 + r * (unit + gap)}" '
-                f'width="{unit}" height="{unit}" rx="7" fill="{fill}"/>'
+                f'width="{unit}" height="{unit}" rx="6" fill="url(#{"acc" if accent else "kc"})"/>'
             )
     bottom = y0 + 4 * (unit + gap)
     for c in range(3):
-        keys.append(f'<rect x="{x0 + c * 34}" y="{bottom}" width="{unit}" height="{unit}" rx="7" fill="url(#key)"/>')
-    keys.append(f'<rect x="{x0 + 102}" y="{bottom}" width="232" height="{unit}" rx="7" fill="url(#key)"/>')
+        keys.append(
+            f'<rect x="{x0 + c * 34}" y="{bottom}" width="{unit}" height="{unit}" rx="6" fill="url(#kc)"/>'
+        )
+    keys.append(f'<rect x="{x0 + 102}" y="{bottom}" width="232" height="{unit}" rx="6" fill="url(#kc)"/>')
     for c in range(4):
-        keys.append(f'<rect x="{x0 + 340 + c * 34}" y="{bottom}" width="{unit}" height="{unit}" rx="7" fill="url(#key)"/>')
+        keys.append(
+            f'<rect x="{x0 + 340 + c * 34}" y="{bottom}" width="{unit}" height="{unit}" rx="6" fill="url(#kc)"/>'
+        )
     body = f"""
-<rect x="140" y="208" width="520" height="210" rx="26" fill="url(#case)"/>
-<rect x="148" y="214" width="504" height="6" rx="3" fill="#fff" opacity="0.12"/>
-{''.join(keys)}
-<circle cx="636" cy="226" r="5" fill="#2dd4bf"/>
+{lit('<rect x="140" y="208" width="520" height="210" rx="24" fill="url(#case)"/>')}
+<rect x="150" y="213" width="500" height="4" rx="2" fill="#fff" opacity=".22"/>
+<g filter="url(#keyshade)">{"".join(keys)}</g>
+<circle cx="636" cy="224" r="4" fill="#80b8af"/>
 """
-    return frame("workspace", defs, body, 280)
+    return Drawing(defs, body, (140, 208, 660, 418), footprint=0.95)
 
 
-def mouse() -> str:
-    defs = lin("shell", "#f8fafc", "#cbd5e1", 1, 1) + lin("side", "#2dd4bf", "#0f766e", 1, 1)
-    body = """
-<path d="M400 150 C490 150 520 230 520 320 C520 420 470 470 400 470 C330 470 280 420 280 320 C280 230 310 150 400 150 Z" fill="url(#side)"/>
-<path d="M400 158 C478 158 506 230 506 316 C506 410 462 456 400 456 C338 456 294 410 294 316 C294 230 322 158 400 158 Z" fill="url(#shell)"/>
-<path d="M400 160 V286" stroke="#94a3b8" stroke-width="3"/>
-<path d="M298 286 C340 296 460 296 502 286" fill="none" stroke="#cbd5e1" stroke-width="3"/>
-<rect x="388" y="196" width="24" height="54" rx="12" fill="#334155"/>
-<rect x="394" y="206" width="12" height="14" rx="6" fill="#64748b"/>
-<path d="M326 220 C336 190 356 174 380 168" stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.8"/>
+def mouse() -> Drawing:
+    defs = flat("shell", "#ffffff", "#d3d6dd") + cyl("side", "#a9cdc7", "#6fa199", "#3f6e67")
+    body = f"""
+{lit('<path d="M400 150 C490 150 520 230 520 320 C520 420 470 470 400 470 C330 470 280 420 280 320 C280 230 310 150 400 150 Z" fill="url(#side)"/>')}
+{lit('<path d="M400 158 C478 158 506 230 506 316 C506 410 462 456 400 456 C338 456 294 410 294 316 C294 230 322 158 400 158 Z" fill="url(#shell)"/>')}
+<path d="M400 160 V286" stroke="#a7abb5" stroke-width="2.5"/>
+<path d="M298 286 C340 296 460 296 502 286" fill="none" stroke="#c9ccd4" stroke-width="2.5"/>
+<rect x="388" y="196" width="24" height="54" rx="12" fill="#30333b"/>
+<rect x="394" y="206" width="12" height="14" rx="6" fill="#5c606b"/>
+<path d="M324 222 C334 192 354 176 378 170" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" opacity=".85"/>
 """
-    return frame("workspace", defs, body, 130)
+    return Drawing(defs, body, (280, 150, 520, 470), footprint=0.6)
 
 
-def notebook() -> str:
-    defs = lin("cover", "#5f8f88", "#2f5d57", 1, 1)
+def notebook() -> Drawing:
+    defs = flat("cover", "#7ea39d", "#3a5e59")
     defs += (
-        '<pattern id="linen" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
-        '<rect width="8" height="8" fill="none"/><path d="M0 0 V8" stroke="#ffffff" stroke-opacity="0.08" stroke-width="3"/></pattern>'
+        '<pattern id="linen" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+        '<path d="M0 0 V6" stroke="#fff" stroke-opacity=".07" stroke-width="2"/></pattern>'
     )
-    body = """
+    body = f"""
 <g transform="rotate(-6 400 320)">
-  <rect x="270" y="166" width="276" height="326" rx="16" fill="#f5f5f4"/>
-  <rect x="262" y="160" width="276" height="326" rx="16" fill="url(#cover)"/>
-  <rect x="262" y="160" width="276" height="326" rx="16" fill="url(#linen)"/>
-  <rect x="262" y="160" width="26" height="326" rx="10" fill="#1f4440" opacity="0.5"/>
-  <rect x="486" y="160" width="14" height="326" fill="#111827" opacity="0.75"/>
-  <rect x="330" y="230" width="140" height="56" rx="8" fill="#f8fafc" opacity="0.92"/>
-  <rect x="348" y="248" width="104" height="6" rx="3" fill="#2f5d57" opacity="0.6"/>
-  <rect x="348" y="264" width="70" height="6" rx="3" fill="#2f5d57" opacity="0.35"/>
-  <path d="M440 486 v44 l14 -12 l14 12 v-44" fill="#f59e0b"/>
+<rect x="270" y="166" width="276" height="326" rx="14" fill="#efede8"/>
+<path d="M546 180 v296" stroke="#d6d2c9" stroke-width="2"/>
+{lit('<rect x="262" y="160" width="276" height="326" rx="14" fill="url(#cover)"/>')}
+<rect x="262" y="160" width="276" height="326" rx="14" fill="url(#linen)"/>
+<rect x="262" y="160" width="24" height="326" rx="10" fill="#1f3b37" opacity=".38"/>
+<rect x="486" y="160" width="13" height="326" fill="#17191d" opacity=".8"/>
+<rect x="330" y="230" width="140" height="56" rx="6" fill="#f6f4ef" opacity=".94"/>
+<rect x="348" y="248" width="104" height="5" rx="2.5" fill="#3a5e59" opacity=".5"/>
+<rect x="348" y="263" width="70" height="5" rx="2.5" fill="#3a5e59" opacity=".3"/>
+<path d="M440 486 v22 l13 -9 l13 9 v-22" fill="#c99543"/>
 </g>
 """
-    return frame("workspace", defs, body, 170)
+    return Drawing(defs, body, (246, 146, 567, 516), footprint=0.62)
 
 
-def laptop_stand() -> str:
-    defs = lin("alu", "#f1f5f9", "#94a3b8", 1, 1) + lin("base", "#e2e8f0", "#94a3b8")
-    defs += lin("screen", "#2dd4bf", "#0f766e", 1, 1)
-    body = """
-<path d="M300 352 L272 462 H300 L330 352 Z" fill="url(#alu)"/>
-<path d="M500 352 L528 462 H500 L470 352 Z" fill="url(#alu)"/>
-<rect x="286" y="404" width="228" height="12" rx="6" fill="#94a3b8"/>
-<rect x="256" y="458" width="76" height="12" rx="6" fill="#64748b"/>
-<rect x="468" y="458" width="76" height="12" rx="6" fill="#64748b"/>
-<rect x="262" y="336" width="276" height="20" rx="8" fill="url(#alu)"/>
-<rect x="268" y="150" width="264" height="174" rx="14" fill="#1e293b"/>
-<rect x="280" y="162" width="240" height="150" rx="6" fill="url(#screen)"/>
-<path d="M280 262 C330 230 370 280 420 246 C460 220 492 236 520 222 V312 H280 Z" fill="#134e4a" opacity="0.55"/>
-<circle cx="476" cy="200" r="16" fill="#ccfbf1" opacity="0.8"/>
-<path d="M228 330 H572 L556 346 H244 Z" fill="url(#base)"/>
-<rect x="372" y="330" width="56" height="5" rx="2.5" fill="#64748b" opacity="0.5"/>
+def laptop_stand() -> Drawing:
+    defs = lin("screen", (0, "#7fb4b4"), (1, "#2f6870"), x2=1, y2=1) + flat("lid", "#4b4f58", "#1f2126")
+    body = f"""
+{lit('<path d="M300 352 L272 462 H300 L330 352 Z" fill="url(#alu)"/>')}
+{lit('<path d="M500 352 L528 462 H500 L470 352 Z" fill="url(#alu)"/>')}
+<rect x="286" y="404" width="228" height="11" rx="5.5" fill="#a3a6ad"/>
+<rect x="256" y="458" width="76" height="12" rx="6" fill="#7c8088"/>
+<rect x="468" y="458" width="76" height="12" rx="6" fill="#7c8088"/>
+{lit('<rect x="262" y="336" width="276" height="20" rx="8" fill="url(#alu)"/>')}
+{lit('<rect x="268" y="150" width="264" height="174" rx="14" fill="url(#lid)"/>')}
+<rect x="280" y="162" width="240" height="150" rx="5" fill="url(#screen)"/>
+<path d="M280 262 C330 232 370 280 420 248 C460 222 492 238 520 224 V312 H280 Z" fill="#163f45" opacity=".5"/>
+<path d="M280 290 C340 270 400 300 460 282 C488 274 506 280 520 276 V312 H280 Z" fill="#0f2e33" opacity=".45"/>
+<path d="M290 166 L400 166 L300 306 L290 306 Z" fill="#fff" opacity=".07"/>
+{lit('<path d="M228 330 H572 L556 346 H244 Z" fill="url(#alu)"/>')}
+<rect x="372" y="330" width="56" height="4" rx="2" fill="#7c8088" opacity=".5"/>
 """
-    return frame("workspace", defs, body, 200)
+    return Drawing(defs, body, (228, 150, 572, 470), footprint=0.85)
 
 
 # --------------------------------------------------------------------------------------
 # Travel & outdoor
 # --------------------------------------------------------------------------------------
-def daypack() -> str:
-    defs = lin("body", "#38bdf8", "#0369a1", 1, 1) + lin("pocket", "#0ea5e9", "#075985", 1, 1)
-    body = """
-<path d="M372 140 C372 110 428 110 428 140" fill="none" stroke="#0c4a6e" stroke-width="14" stroke-linecap="round"/>
-<path d="M290 220 C290 160 330 140 400 140 C470 140 510 160 510 220 V440 Q510 476 474 476 H326 Q290 476 290 440 Z" fill="url(#body)"/>
-<path d="M300 200 C330 172 470 172 500 200" fill="none" stroke="#0c4a6e" stroke-width="5" stroke-dasharray="2 8" stroke-linecap="round"/>
-<rect x="318" y="330" width="164" height="124" rx="30" fill="url(#pocket)"/>
-<path d="M330 352 H470" stroke="#e0f2fe" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
-<rect x="452" y="344" width="10" height="26" rx="5" fill="#fbbf24"/>
-<rect x="366" y="240" width="68" height="42" rx="10" fill="#0c4a6e"/>
-<path d="M384 268 l12 -16 l10 10 l8 -8 l12 14" fill="none" stroke="#7dd3fc" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M306 236 V420" stroke="#fff" stroke-opacity="0.25" stroke-width="10" stroke-linecap="round"/>
+def daypack() -> Drawing:
+    defs = cyl("pack", "#7ea4c4", "#4f7ca3", "#284d6c") + cyl("pocket", "#6d94b6", "#456f94", "#223f58")
+    body = f"""
+<path d="M372 140 C372 110 428 110 428 140" fill="none" stroke="#24384b" stroke-width="13" stroke-linecap="round"/>
+{lit('<path d="M290 220 C290 160 330 140 400 140 C470 140 510 160 510 220 V440 Q510 476 474 476 H326 Q290 476 290 440 Z" fill="url(#pack)"/>')}
+<path d="M300 200 C330 172 470 172 500 200" fill="none" stroke="#1d3347" stroke-width="4" stroke-dasharray="2 7" stroke-linecap="round"/>
+{lit('<rect x="318" y="330" width="164" height="124" rx="30" fill="url(#pocket)"/>')}
+<path d="M332 352 H468" stroke="#d5e2ee" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+<rect x="452" y="344" width="9" height="24" rx="4.5" fill="#c99a4b"/>
+<rect x="368" y="242" width="64" height="40" rx="9" fill="#5a4636"/>
+<rect x="374" y="248" width="52" height="28" rx="6" fill="none" stroke="#c9b49a" stroke-width="1.5" stroke-dasharray="3 3" opacity=".7"/>
+<path d="M306 236 V420" stroke="#fff" stroke-opacity=".2" stroke-width="10" stroke-linecap="round"/>
 """
-    return frame("travel", defs, body, 160)
+    return Drawing(defs, body, (290, 111, 510, 476), footprint=0.82)
 
 
-def bottle() -> str:
-    defs = lin("steel", "#0ea5e9", "#0c4a6e", 1, 0) + lin("cap", "#334155", "#0f172a", 1, 0)
-    body = """
-<rect x="366" y="114" width="68" height="20" rx="8" fill="#1e293b"/>
-<path d="M372 112 C372 90 428 90 428 112" fill="none" stroke="#1e293b" stroke-width="10"/>
-<rect x="348" y="128" width="104" height="64" rx="14" fill="url(#cap)"/>
-<path d="M350 196 C350 216 330 222 330 250 V440 Q330 474 364 474 H436 Q470 474 470 440 V250 C470 222 450 216 450 196 Z" fill="url(#steel)"/>
-<rect x="330" y="300" width="140" height="46" fill="#082f49" opacity="0.25"/>
-<path d="M352 236 V440" stroke="#fff" stroke-opacity="0.35" stroke-width="12" stroke-linecap="round"/>
-<path d="M444 246 V430" stroke="#fff" stroke-opacity="0.12" stroke-width="6" stroke-linecap="round"/>
+def bottle() -> Drawing:
+    defs = cyl("coat", "#7aa6c6", "#47789c", "#22455f") + cyl("cap", "#6a6e78", "#3b3e46", "#16171b")
+    body = f"""
+<path d="M372 112 C372 90 428 90 428 112" fill="none" stroke="#2a2c32" stroke-width="10"/>
+<rect x="366" y="112" width="68" height="20" rx="8" fill="#2a2c32"/>
+{lit('<rect x="348" y="128" width="104" height="64" rx="14" fill="url(#cap)"/>')}
+<rect x="350" y="188" width="100" height="10" rx="3" fill="url(#alu)"/>
+{lit('<path d="M350 198 C350 216 330 222 330 250 V440 Q330 474 364 474 H436 Q470 474 470 440 V250 C470 222 450 216 450 198 Z" fill="url(#coat)"/>')}
+<path d="M352 238 V440" stroke="#fff" stroke-opacity=".3" stroke-width="11" stroke-linecap="round"/>
+<path d="M446 248 V430" stroke="#fff" stroke-opacity=".1" stroke-width="5" stroke-linecap="round"/>
 """
-    return frame("travel", defs, body, 110)
+    return Drawing(defs, body, (330, 91, 470, 474), footprint=0.82)
 
 
-def camera() -> str:
-    defs = lin("shell", "#f8fafc", "#cbd5e1", 1, 1) + rad("lens", "#475569", "#020617", 0.38, 0.32)
-    defs += lin("stripe", "#f97316", "#facc15", 1, 0)
-    body = """
-<rect x="350" y="150" width="190" height="72" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" transform="rotate(-8 445 186)"/>
-<rect x="364" y="160" width="160" height="52" rx="4" fill="#7dd3fc" transform="rotate(-8 445 186)"/>
-<path d="M376 206 l40 -30 l26 18 l30 -24 l44 30" fill="#0ea5e9" transform="rotate(-8 445 186)"/>
-<rect x="230" y="200" width="340" height="250" rx="44" fill="url(#shell)"/>
-<rect x="230" y="372" width="340" height="16" fill="url(#stripe)"/>
-<rect x="268" y="226" width="64" height="40" rx="10" fill="#1e293b"/>
-<rect x="276" y="234" width="48" height="24" rx="6" fill="#334155"/>
-<rect x="470" y="226" width="64" height="30" rx="8" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="2"/>
-<circle cx="400" cy="312" r="86" fill="#e2e8f0"/>
+def camera() -> Drawing:
+    defs = flat("body", "#ffffff", "#d2d5dc") + rad("lens", (0, "#4b5160"), (1, "#05060a"), cx=0.38, cy=0.32)
+    defs += lin("stripe", (0, "#d9844e"), (1, "#dcb85a"), x2=1, y2=0)
+    defs += lin("photo", (0, "#bcd6e6"), (1, "#7fa7c0"))
+    body = f"""
+<g transform="rotate(-8 445 186)">
+<rect x="350" y="150" width="190" height="72" rx="6" fill="#fbfbfc" stroke="#dfe1e6" stroke-width="2"/>
+<rect x="364" y="160" width="160" height="52" rx="3" fill="url(#photo)"/>
+<path d="M376 206 l40 -28 l26 16 l30 -22 l44 30 v4 h-140 Z" fill="#4f7d98" opacity=".75"/>
+</g>
+{lit('<rect x="230" y="200" width="340" height="250" rx="44" fill="url(#body)"/>')}
+<rect x="230" y="372" width="340" height="14" fill="url(#stripe)"/>
+<rect x="268" y="226" width="64" height="40" rx="10" fill="#22252c"/>
+<rect x="276" y="234" width="48" height="24" rx="6" fill="#3a3e48"/>
+<rect x="470" y="226" width="64" height="30" rx="8" fill="#e6e8ec" stroke="#cdd0d7" stroke-width="2"/>
+<circle cx="400" cy="312" r="86" fill="url(#alu)"/>
 <circle cx="400" cy="312" r="72" fill="url(#lens)"/>
-<circle cx="400" cy="312" r="44" fill="none" stroke="#64748b" stroke-width="3" opacity="0.6"/>
-<circle cx="400" cy="312" r="22" fill="#0b1220"/>
-<circle cx="378" cy="290" r="14" fill="#fff" opacity="0.35"/>
-<circle cx="530" cy="420" r="12" fill="#ef4444"/>
+<circle cx="400" cy="312" r="44" fill="none" stroke="#5c6270" stroke-width="2.5" opacity=".6"/>
+<circle cx="400" cy="312" r="22" fill="#07080c"/>
+<ellipse cx="378" cy="290" rx="14" ry="11" fill="#fff" opacity=".3"/>
+<circle cx="532" cy="420" r="10" fill="#c9503f"/>
+<path d="M248 236 C254 220 266 210 282 206" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" opacity=".9"/>
 """
-    return frame("travel", defs, body, 200)
+    return Drawing(defs, body, (230, 137, 570, 450), footprint=0.9)
 
 
-ARTWORK: dict[str, Callable[[], str]] = {
+ARTWORK: dict[str, Callable[[], Drawing]] = {
     "aurora-wireless-headphones": headphones,
     "pulse-mini-speaker": speaker,
     "echo-studio-earbuds": earbuds,
@@ -448,7 +633,7 @@ ARTWORK: dict[str, Callable[[], str]] = {
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for slug, draw in ARTWORK.items():
-        (OUT / f"{slug}.svg").write_text(draw(), encoding="utf-8")
+        (OUT / f"{slug}.svg").write_text(frame(draw()), encoding="utf-8")
     print(f"Wrote {len(ARTWORK)} illustrations to {OUT}")
 
 
