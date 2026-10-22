@@ -15,6 +15,9 @@ test.describe("Bag", () => {
     await page.getByRole("button", { name: "Increase quantity" }).click();
     await page.getByRole("button", { name: "Add to Bag" }).click();
     await expect(page.getByText("Added to bag")).toBeVisible();
+    // The pressed button and the nav's bag icon both acknowledge the add.
+    await expect(page.getByRole("button", { name: "Added", exact: true })).toBeVisible();
+    await expect(page.locator("[data-bag-cue]")).toHaveCount(1);
 
     // Desktop: the bag opens as a popover from the global nav.
     await page.getByRole("button", { name: "Bag, 2 items" }).click();
