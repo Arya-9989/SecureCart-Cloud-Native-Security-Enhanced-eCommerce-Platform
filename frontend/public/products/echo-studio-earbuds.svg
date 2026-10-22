@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef0ff"/><stop offset="1" stop-color="#c9cffb"/></linearGradient>
+<radialGradient id="spot" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+<filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1e1b4b" flood-opacity="0.18"/></filter>
+<linearGradient id="case" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d7dbf3"/></linearGradient><linearGradient id="bud" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c7cbe6"/></linearGradient>
+</defs>
+<rect width="800" height="600" fill="url(#bg)"/>
+<rect width="800" height="600" fill="url(#spot)"/>
+<circle cx="660" cy="110" r="70" fill="#fff" opacity="0.28"/>
+<circle cx="130" cy="500" r="110" fill="#fff" opacity="0.18"/>
+<ellipse cx="400" cy="478" rx="200" ry="20" fill="#1e1b4b" opacity="0.16" filter="url(#soft)"/>
+<g filter="url(#lift)">
+
+<rect x="240" y="300" width="250" height="160" rx="70" fill="url(#case)"/>
+<path d="M240 370 H490" stroke="#b8bde0" stroke-width="3"/>
+<path d="M252 330 C262 250 470 250 480 330 Z" fill="#eceefb" transform="rotate(-18 250 330)"/>
+<circle cx="365" cy="420" r="6" fill="#22c55e"/>
+<g transform="translate(470 210) rotate(18)">
+  <ellipse cx="40" cy="40" rx="40" ry="36" fill="url(#bud)"/>
+  <ellipse cx="22" cy="40" rx="14" ry="16" fill="#334155"/>
+  <rect x="44" y="52" width="26" height="120" rx="13" fill="url(#bud)"/>
+</g>
+<g transform="translate(520 300) rotate(-8)">
+  <ellipse cx="40" cy="40" rx="40" ry="36" fill="url(#bud)"/>
+  <ellipse cx="58" cy="40" rx="14" ry="16" fill="#334155"/>
+  <rect x="10" y="52" width="26" height="120" rx="13" fill="url(#bud)"/>
+</g>
+
+</g>
+</svg>

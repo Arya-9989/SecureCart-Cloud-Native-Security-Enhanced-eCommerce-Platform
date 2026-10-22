@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1f1"/><stop offset="1" stop-color="#fbcfd0"/></linearGradient>
+<radialGradient id="spot" cx="0.5" cy="0.42" r="0.55"><stop offset="0" stop-color="#fff" stop-opacity="0.75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+<filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#1e1b4b" flood-opacity="0.18"/></filter>
+<linearGradient id="lens" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#334155"/><stop offset="1" stop-color="#0f172a"/></linearGradient><linearGradient id="frame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c2d12"/><stop offset="1" stop-color="#431407"/></linearGradient><linearGradient id="shine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffffff00"/></linearGradient>
+</defs>
+<rect width="800" height="600" fill="url(#bg)"/>
+<rect width="800" height="600" fill="url(#spot)"/>
+<circle cx="660" cy="110" r="70" fill="#fff" opacity="0.28"/>
+<circle cx="130" cy="500" r="110" fill="#fff" opacity="0.18"/>
+<ellipse cx="400" cy="478" rx="230" ry="20" fill="#1e1b4b" opacity="0.16" filter="url(#soft)"/>
+<g filter="url(#lift)">
+
+<path d="M196 262 L150 236" stroke="url(#frame)" stroke-width="14" stroke-linecap="round"/>
+<path d="M604 262 L650 236" stroke="url(#frame)" stroke-width="14" stroke-linecap="round"/>
+<path d="M202 252 Q300 232 372 256 Q382 344 318 384 Q238 400 214 346 Q196 300 202 252 Z" fill="url(#lens)" stroke="url(#frame)" stroke-width="16" stroke-linejoin="round"/>
+<path d="M598 252 Q500 232 428 256 Q418 344 482 384 Q562 400 586 346 Q604 300 598 252 Z" fill="url(#lens)" stroke="url(#frame)" stroke-width="16" stroke-linejoin="round"/>
+<path d="M372 262 Q400 240 428 262" fill="none" stroke="url(#frame)" stroke-width="14" stroke-linecap="round"/>
+<path d="M236 280 Q270 266 310 270 L250 350 Q228 320 236 280 Z" fill="url(#shine)" opacity="0.28"/>
+<path d="M462 280 Q500 266 540 270 L476 350 Q454 320 462 280 Z" fill="url(#shine)" opacity="0.28"/>
+
+</g>
+</svg>

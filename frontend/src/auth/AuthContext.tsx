@@ -1,0 +1,72 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { onSessionChange, refreshSession, setSession } from "@/lib/api";
+import { authApi } from "@/lib/endpoints";
+import type { User } from "@/lib/types";
+
+import { AuthContext, type AuthContextValue, type AuthStatus } from "./context";
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState<User | null>(null);
+  const [status, setStatus] = useState<AuthStatus>("loading");
+
+  const apply = useCallback((next: User | null) => {
+    setUser(next);
+    setStatus(next ? "authenticated" : "anonymous");
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    // Restore the session from the httpOnly refresh cookie on page load.
+    void refreshSession().then((restored) => {
+      if (active) apply(restored);
+    });
+    const unsubscribe = onSessionChange((next) => {
+      apply(next);
+      if (!next) queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "catalog" });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [apply, queryClient]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const data = await authApi.login(email, password);
+      setSession(data.access);
+      apply(data.user);
+      return data.user;
+    },
+    [apply],
+  );
+
+  const register = useCallback(
+    async (input: { email: string; full_name: string; password: string }) => {
+      const data = await authApi.register(input);
+      setSession(data.access);
+      apply(data.user);
+      return data.user;
+    },
+    [apply],
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      setSession(null);
+      apply(null);
+      queryClient.clear();
+    }
+  }, [apply, queryClient]);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ status, user, isAdmin: user?.role === "admin", login, register, logout }),
+    [status, user, login, register, logout],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}

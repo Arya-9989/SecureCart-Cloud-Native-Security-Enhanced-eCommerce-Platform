@@ -1,0 +1,192 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Components only ever use the semantic names below (bg-surface, text-muted,
+ * border-line, bg-brand...), so light and dark themes are a matter of swapping variables.
+ */
+:root {
+  --bg: #f7f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f2f7;
+  --surface-3: #e7e8f0;
+  --line: #e3e4ec;
+  --line-strong: #cfd1dd;
+  --text: #0f1222;
+  --text-muted: #5b6075;
+  --text-subtle: #8a8fa3;
+  --brand: #4f46e5;
+  --brand-hover: #4338ca;
+  --brand-soft: #eef0ff;
+  --brand-fg: #ffffff;
+  --success: #0f8a5f;
+  --success-soft: #e6f6ef;
+  --warning: #b45309;
+  --warning-soft: #fdf3e2;
+  --danger: #c2283b;
+  --danger-soft: #fdecee;
+  --info: #2563eb;
+  --info-soft: #e8f0fe;
+  --ring: #6366f1;
+  --shadow-color: 228 30% 25%;
+  /* Chart series (validated with the dataviz palette checker against --surface). */
+  --series-1: #2a78d6;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0b0d17;
+  --surface: #12152a;
+  --surface-2: #181c35;
+  --surface-3: #222744;
+  --line: #262b49;
+  --line-strong: #353b5e;
+  --text: #eceefb;
+  --text-muted: #a3a8c3;
+  --text-subtle: #767c9b;
+  --brand: #818cf8;
+  --brand-hover: #a5b4fc;
+  --brand-soft: #1e2150;
+  --brand-fg: #0b0d17;
+  --success: #34d399;
+  --success-soft: #0f2a24;
+  --warning: #fbbf24;
+  --warning-soft: #2d2410;
+  --danger: #f87185;
+  --danger-soft: #34141c;
+  --info: #7cacf8;
+  --info-soft: #14213d;
+  --ring: #a5b4fc;
+  --shadow-color: 232 60% 2%;
+  --series-1: #3987e5;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-fg: var(--brand-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-ring: var(--ring);
+  --color-series-1: var(--series-1);
+
+  --shadow-card:
+    0 1px 2px hsl(var(--shadow-color) / 0.06), 0 2px 8px hsl(var(--shadow-color) / 0.05);
+  --shadow-lift:
+    0 2px 4px hsl(var(--shadow-color) / 0.06), 0 12px 32px hsl(var(--shadow-color) / 0.12);
+  --shadow-pop:
+    0 8px 24px hsl(var(--shadow-color) / 0.16), 0 24px 64px hsl(var(--shadow-color) / 0.18);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-slide-up: slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 25%, transparent);
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+  dialog::backdrop {
+    background: rgb(8 10 20 / 0.55);
+    backdrop-filter: blur(3px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface-2) 25%,
+      var(--surface-3) 37%,
+      var(--surface-2) 63%
+    );
+    background-size: 400% 100%;
+    @apply animate-shimmer rounded-lg;
+  }
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-fg;
+  }
+  .field {
+    @apply block w-full rounded-xl border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-fg shadow-xs transition placeholder:text-subtle focus:border-brand focus:ring-4 focus:ring-brand/15 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/15;
+  }
+}
