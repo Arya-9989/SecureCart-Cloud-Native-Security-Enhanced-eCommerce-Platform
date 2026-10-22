@@ -271,6 +271,16 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024  # 1 MiB: the API only accepts small J
 # Domain configuration
 # --------------------------------------------------------------------------------------
 PAYMENT_PROVIDER = env_str("PAYMENT_PROVIDER", "apps.payments.providers.mock.MockPaymentProvider")
+# Stripe (only read when PAYMENT_PROVIDER is the Stripe provider). Test mode by default:
+# live keys are refused unless STRIPE_ALLOW_LIVE_MODE is set. See ADR 0003.
+STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = env_str("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_API_BASE = env_str("STRIPE_API_BASE", "https://api.stripe.com")
+STRIPE_TIMEOUT_SECONDS = env_int("STRIPE_TIMEOUT_SECONDS", 10)
+STRIPE_MAX_NETWORK_RETRIES = env_int("STRIPE_MAX_NETWORK_RETRIES", 2)
+#: Signed webhooks older than this are rejected as replays (Stripe's own default is 300).
+STRIPE_WEBHOOK_TOLERANCE_SECONDS = env_int("STRIPE_WEBHOOK_TOLERANCE_SECONDS", 300)
+STRIPE_ALLOW_LIVE_MODE = env_bool("STRIPE_ALLOW_LIVE_MODE", default=False)
 STORE_CURRENCY = env_str("STORE_CURRENCY", "USD")
 FREE_SHIPPING_THRESHOLD = env_str("FREE_SHIPPING_THRESHOLD", "75.00")
 FLAT_SHIPPING_FEE = env_str("FLAT_SHIPPING_FEE", "6.99")

@@ -11,6 +11,7 @@ import type {
   OrderStatus,
   OrderSummary,
   Paginated,
+  PaymentConfig,
   Product,
   ShippingAddress,
   TokenResponse,
@@ -96,6 +97,10 @@ export const cartApi = {
   update: (itemId: number, quantity: number) =>
     apiFetch<Cart>(`/cart/items/${itemId}/`, { method: "PATCH", body: { quantity } }),
   remove: (itemId: number) => apiFetch<Cart>(`/cart/items/${itemId}/`, { method: "DELETE" }),
+};
+
+export const paymentsApi = {
+  config: () => apiFetch<PaymentConfig>("/payments/config/"),
 };
 
 export const orderApi = {

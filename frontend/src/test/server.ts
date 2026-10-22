@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
-import type { Cart, Category, Order, Paginated, Product, User } from "@/lib/types";
+import type { Cart, Category, Order, Paginated, PaymentConfig, Product, User } from "@/lib/types";
 
 export const customer: User = {
   id: 2,
@@ -138,6 +138,24 @@ export function makeOrder(overrides: Partial<Order> = {}): Order {
   };
 }
 
+export const mockPaymentConfig: PaymentConfig = {
+  provider: "mock",
+  mode: "offline",
+  confirms_asynchronously: false,
+  test_methods: [
+    {
+      token: "tok_mock_approve",
+      label: "Test card: approve",
+      description: "The mock provider captures the payment.",
+    },
+    {
+      token: "tok_mock_decline",
+      label: "Test card: decline",
+      description: "Simulates a declined card so you can see stock being released.",
+    },
+  ],
+};
+
 /** Mutable session state for the fake auth endpoints. */
 export const session: { user: User | null } = { user: null };
 
@@ -173,6 +191,7 @@ export const handlers = [
       : HttpResponse.json({ error: { code: "not_found", message: "Not found." } }, { status: 404 });
   }),
   http.get("*/api/cart/", () => HttpResponse.json(makeCart())),
+  http.get("*/api/payments/config/", () => HttpResponse.json(mockPaymentConfig)),
 ];
 
 export const server = setupServer(...handlers);

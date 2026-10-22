@@ -117,32 +117,64 @@ def place_order(
         payment_token=payment_token,
         idempotency_key=str(order.id),
     )
+    if result.pending or (result.success and provider.confirms_asynchronously):
+        # The provider settles this later (webhook or reconciliation). Stock stays reserved
+        # and the bag untouched until then; the order is reported as pending_payment.
+        if result.reference:
+            Order.objects.filter(pk=order.pk, payment_reference="").update(
+                payment_reference=result.reference
+            )
+        order.refresh_from_db()
+        return CheckoutResult(order, replayed=False)
     if not result.success:
-        order = state.transition(
-            order,
-            OrderStatus.PAYMENT_FAILED,
-            note=result.failure_reason,
-            failure_reason=result.failure_reason[:200],
-            payment_reference=result.reference,
-        )
+        order = mark_failed(order, result.failure_reason, result.reference)
         raise PaymentDeclined(result.failure_reason or "Payment was declined.", order)
 
     try:
-        with transaction.atomic():
-            order = state.transition(
-                order,
-                OrderStatus.PAID,
-                note="Payment captured",
-                payment_reference=result.reference,
-            )
-            _consume_cart(user, order)
+        order = finalize_paid(order, result.reference)
     except state.InvalidTransition:
         # The order was cancelled (e.g. by an admin) while the charge was in flight: the
         # stock is already released, so give the money back and report the final state.
-        provider.refund(reference=result.reference, amount=order.total, currency=order.currency)
+        refund_late_payment(order, result.reference)
         order.refresh_from_db()
         raise CheckoutError("The order was cancelled before payment completed.") from None
     return CheckoutResult(order, replayed=False)
+
+
+def finalize_paid(order: Order, reference: str, note: str = "Payment captured") -> Order:
+    """Mark a reserved order paid and take its lines out of the bag (one transaction).
+
+    Raises ``state.InvalidTransition`` if the order is no longer awaiting payment.
+    """
+    with transaction.atomic():
+        order = state.transition(order, OrderStatus.PAID, note=note, payment_reference=reference)
+        _consume_cart(order.user, order)
+    return order
+
+
+def mark_failed(order: Order, reason: str, reference: str = "") -> Order:
+    """Record a failed payment and release the stock. A no-op if already settled."""
+    fields: dict[str, Any] = {"failure_reason": reason[:200]}
+    if reference:
+        fields["payment_reference"] = reference
+    try:
+        return state.transition(
+            order, OrderStatus.PAYMENT_FAILED, note=reason or "Payment failed", **fields
+        )
+    except state.InvalidTransition:
+        order.refresh_from_db()
+        return order
+
+
+def refund_late_payment(order: Order, reference: str) -> bool:
+    """Money arrived for an order that is no longer payable: send it back."""
+    result = get_payment_provider().refund(
+        reference=reference,
+        amount=order.total,
+        currency=order.currency,
+        idempotency_key=f"late-{order.pk}",
+    )
+    return result.success
 
 
 @transaction.atomic
@@ -224,7 +256,7 @@ def _reserve(user: User, address: ShippingAddress, idempotency_key: str) -> Orde
     return order
 
 
-def _consume_cart(user: User, order: Order) -> None:
+def _consume_cart(user: Any, order: Order) -> None:
     """Remove purchased quantities from the cart (items added meanwhile are kept)."""
     purchased = {item.product_id: item.quantity for item in order.items.all()}
     for cart_item in CartItem.objects.select_for_update().filter(

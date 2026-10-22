@@ -35,11 +35,16 @@ jobs:
       mailpit:
         image: axllent/mailpit:v1.31.6
         ports: ["1025:1025", "8025:8025"]
+      stripe-mock:
+        image: stripe/stripe-mock:v0.206.0
+        ports: ["12111:12111"]
     env:
       DATABASE_URL: postgres://securecart:securecart@localhost:5432/securecart
       # Real SMTP delivery tests (tests/test_mailpit.py) run against this Mailpit.
       MAILPIT_URL: http://localhost:8025
       MAILPIT_SMTP_PORT: "1025"
+      # Stripe API contract tests (tests/test_stripe.py) run against stripe-mock.
+      STRIPE_MOCK_URL: http://localhost:12111
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

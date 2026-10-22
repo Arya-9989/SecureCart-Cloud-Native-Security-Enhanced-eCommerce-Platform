@@ -18,6 +18,7 @@ from apps.catalog.views import (
 from apps.core.views import HealthView
 from apps.dashboard.views import DashboardView
 from apps.orders.views import AdminOrderViewSet, CheckoutView, OrderViewSet
+from apps.payments.views import PaymentConfigView, stripe_webhook
 
 public = DefaultRouter(trailing_slash=True)
 public.include_root_view = False
@@ -40,6 +41,8 @@ api: list[URLPattern | URLResolver] = [
     path("cart/items/", CartItemsView.as_view(), name="cart-items"),
     path("cart/items/<int:item_id>/", CartItemDetailView.as_view(), name="cart-item"),
     path("checkout/", CheckoutView.as_view(), name="checkout"),
+    path("payments/config/", PaymentConfigView.as_view(), name="payment-config"),
+    path("payments/webhooks/stripe/", stripe_webhook, name="stripe-webhook"),
     path("admin/dashboard/", DashboardView.as_view(), name="admin-dashboard"),
     path("admin/", include(admin.urls)),
     path("", include(public.urls)),

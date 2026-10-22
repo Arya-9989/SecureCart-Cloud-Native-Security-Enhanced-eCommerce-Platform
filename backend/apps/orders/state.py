@@ -105,7 +105,10 @@ def _release_stock(order: Order) -> None:
 def _refund(order: Order) -> None:
     provider = get_payment_provider()
     result = provider.refund(
-        reference=order.payment_reference, amount=order.total, currency=order.currency
+        reference=order.payment_reference,
+        amount=order.total,
+        currency=order.currency,
+        idempotency_key=f"cancel-{order.pk}",
     )
     if not result.success:
         raise RefundFailed(f"Refund failed for order {order.number}.")

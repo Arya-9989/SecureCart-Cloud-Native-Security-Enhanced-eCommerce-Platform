@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { AlertCircle, CreditCard, KeyRound, Lock, RotateCcw } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate } from "react-router";
 import type { z } from "zod";
@@ -14,25 +14,17 @@ import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { SelectField, TextField } from "@/components/ui/Field";
 import { ProductImage, Skeleton } from "@/components/ui/misc";
-import { keys, useCart } from "@/hooks/queries";
+import { keys, useCart, usePaymentConfig } from "@/hooks/queries";
 import { ApiError, errorMessage } from "@/lib/api";
 import { orderApi } from "@/lib/endpoints";
 import { formatMoney, newIdempotencyKey } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { COUNTRIES, checkoutSchema } from "@/lib/validation";
 
-const PAYMENT_METHODS = [
-  {
-    token: "tok_mock_approve",
-    label: "Test card: approve",
-    description: "The mock provider captures the payment.",
-  },
-  {
-    token: "tok_mock_decline",
-    label: "Test card: decline",
-    description: "Simulates a declined card so you can see stock being released.",
-  },
-] as const;
+const PROVIDER_BADGE: Record<string, string> = {
+  mock: "Mock provider",
+  stripe: "Stripe test mode",
+};
 
 type CheckoutForm = z.infer<typeof checkoutSchema>;
 
@@ -102,6 +94,7 @@ function TrustNote({ icon: Icon, children }: { icon: typeof Lock; children: Reac
 export function CheckoutPage() {
   const { user, reloadUser } = useAuth();
   const { data: cart, isLoading, error, refetch } = useCart();
+  const payment = usePaymentConfig();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const idempotencyKey = useRef(newIdempotencyKey());
@@ -119,9 +112,16 @@ export function CheckoutPage() {
       city: "",
       postal_code: "",
       country: "US",
-      payment_token: "tok_mock_approve",
+      payment_token: "",
     },
   });
+  const methods = payment.data?.test_methods ?? [];
+  const firstMethod = methods[0]?.token;
+  const { getValues, setValue } = form;
+  useEffect(() => {
+    // Select the provider's first test method once the configuration has loaded.
+    if (firstMethod && !getValues("payment_token")) setValue("payment_token", firstMethod);
+  }, [firstMethod, getValues, setValue]);
 
   const placeOrder = useMutation({
     mutationFn: ({ payment_token, ...address }: CheckoutForm) =>
@@ -154,10 +154,16 @@ export function CheckoutPage() {
     },
   });
 
-  if (error) {
+  if (error ?? payment.error) {
     return (
       <div className="container-page py-16">
-        <ErrorState error={error} onRetry={() => void refetch()} />
+        <ErrorState
+          error={error ?? payment.error}
+          onRetry={() => {
+            void refetch();
+            void payment.refetch();
+          }}
+        />
       </div>
     );
   }
@@ -307,14 +313,22 @@ export function CheckoutPage() {
             id="payment-heading"
             title="How would you like to pay?"
             aside={
-              <span className="shrink-0 rounded-full bg-warning-soft px-2.5 py-1 text-[12px] font-medium text-warning">
-                Mock provider
-              </span>
+              payment.data && (
+                <span className="shrink-0 rounded-full bg-warning-soft px-2.5 py-1 text-[12px] font-medium text-warning">
+                  {PROVIDER_BADGE[payment.data.provider] ?? payment.data.provider}
+                </span>
+              )
             }
           >
-            <fieldset className="grid gap-3 sm:grid-cols-2">
+            <fieldset className="grid gap-3 sm:grid-cols-2" aria-busy={payment.isLoading}>
               <legend className="sr-only">Payment method</legend>
-              {PAYMENT_METHODS.map((method) => (
+              {payment.isLoading && (
+                <>
+                  <Skeleton className="h-[104px] rounded-[18px]" />
+                  <Skeleton className="h-[104px] rounded-[18px]" />
+                </>
+              )}
+              {methods.map((method) => (
                 <label
                   key={method.token}
                   className={clsx(

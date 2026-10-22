@@ -21,7 +21,12 @@ export const checkoutSchema = z.object({
     .trim()
     .regex(/^[A-Za-z0-9 -]{3,10}$/, "Enter a valid postal code"),
   country: z.enum(COUNTRIES.map(([code]) => code) as [string, ...string[]]),
-  payment_token: z.enum(["tok_mock_approve", "tok_mock_decline"]),
+  // The provider's own test methods (GET /api/payments/config/); the server validates them.
+  payment_token: z
+    .string()
+    .min(1, "Choose a payment method")
+    .max(128)
+    .regex(/^[A-Za-z0-9_]+$/, "Choose a payment method"),
 });
 
 export const productSchema = z.object({

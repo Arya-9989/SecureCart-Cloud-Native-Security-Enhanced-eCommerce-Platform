@@ -12,6 +12,19 @@ export interface User {
   date_joined: string;
 }
 
+export interface PaymentMethodOption {
+  token: string;
+  label: string;
+  description: string;
+}
+
+export interface PaymentConfig {
+  provider: string;
+  mode: "offline" | "test" | "live";
+  confirms_asynchronously: boolean;
+  test_methods: PaymentMethodOption[];
+}
+
 export interface TokenResponse {
   access: string;
   user: User;

@@ -50,6 +50,10 @@ services:
       DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
       DEMO_CUSTOMER_PASSWORD: ${DEMO_CUSTOMER_PASSWORD:-}
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-apps.payments.providers.mock.MockPaymentProvider}
+      # Stripe test mode (only read when PAYMENT_PROVIDER is the Stripe provider; ADR 0003).
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_ALLOW_LIVE_MODE: ${STRIPE_ALLOW_LIVE_MODE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Every setting the README documents can be changed from .env (defaults shown).
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}

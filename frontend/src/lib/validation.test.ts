@@ -32,9 +32,17 @@ describe("checkoutSchema", () => {
     expect(checkoutSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("rejects malformed postal codes and unknown payment tokens", () => {
+  it("rejects malformed postal codes and payment tokens", () => {
     expect(checkoutSchema.safeParse({ ...valid, postal_code: "<script>" }).success).toBe(false);
-    expect(checkoutSchema.safeParse({ ...valid, payment_token: "tok_real" }).success).toBe(false);
+    for (const token of ["", "pm card", "<script>", "x".repeat(129)]) {
+      expect(checkoutSchema.safeParse({ ...valid, payment_token: token }).success).toBe(false);
+    }
+  });
+
+  it("accepts any provider's test method ids", () => {
+    for (const token of ["tok_mock_decline", "pm_card_visa", "pm_card_chargeDeclined"]) {
+      expect(checkoutSchema.safeParse({ ...valid, payment_token: token }).success).toBe(true);
+    }
   });
 });
 

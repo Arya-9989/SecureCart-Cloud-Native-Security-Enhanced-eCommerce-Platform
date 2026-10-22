@@ -46,7 +46,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 - Catalog with categories, search (name, description, SKU, category), price and availability filters, sorting and pagination, all reflected in the URL.
 - Product pages with stock indicators ("Only 3 left", "Sold out") and related products.
 - Server-side bag (cart) that follows the customer across devices, with per-line limits checked against live stock; previewed from the nav as a popover on desktop and a drawer on mobile.
-- Checkout with address validation, a free-shipping threshold and tax, and a pluggable payment provider (an offline mock by default).
+- Checkout with address validation, a free-shipping threshold and tax, and a pluggable payment provider: an offline mock by default, or **Stripe in test mode** (PaymentIntents confirmed by signed webhooks; the order page waits for the confirmation).
 - Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund).
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
 - Public pages (home, shop and each category, `/protection` and every product) are prerendered at build time and hydrated, so they read completely before, or without, any JavaScript.
@@ -76,12 +76,13 @@ flowchart LR
         db[("PostgreSQL 17")]
     end
 
-    payment["PaymentProvider<br/>(mock by default)"]
+    payment["PaymentProvider<br/>(mock by default, or Stripe test mode)"]
 
     browser -- "single origin" --> nginx
     nginx -- "/api/*, /static/*" --> api
     api -- "ORM, row locks" --> db
     api -- "charge / refund" --> payment
+    payment -. "signed webhooks" .-> api
 ```
 
 The browser only ever talks to one origin: nginx serves the SPA and proxies `/api` to Django, so the refresh cookie can be `SameSite=Strict` and CORS stays closed by default. The public pages are prerendered by `npm run build` (React's `react-dom/static`, `frontend/scripts/prerender.mjs`) from `frontend/prerender/catalog.json`, public catalog responses recorded from the seeded demo store, so the build needs no running API; nginx answers each of those URLs with its own HTML file, the app hydrates it and refetches live stock and prices at once. A backend test keeps the snapshot equal to `seed_demo`'s catalog; after changing the demo catalog, re-record it with `npm run prerender:capture -- http://localhost:8080`.
@@ -129,6 +130,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 | **Private pages and crawlers** | The bag, checkout, orders, admin and not-found pages carry `<meta name="robots" content="noindex">`. `robots.txt` only disallows `/api/`, because a crawler blocked from a page never sees its `noindex`. |
 | **Open redirects** | The `?next=` parameter after sign-in only accepts same-site relative paths. |
 | **Payments** | No card data reaches the backend: the client sends an opaque provider token. Checkout requires an `Idempotency-Key` header, so retries never double-charge or double-reserve, even when they race the first attempt: reservations are serialised per shopper and the key is re-checked under that lock. A retry gets the first attempt's answer, including its `402` if the card was declined. |
+| **Payment webhooks** | Stripe events are accepted only with a valid `Stripe-Signature` (HMAC-SHA256 over the raw body, any of several `v1` signatures during a secret rotation) and a timestamp under 5 minutes old. The event id is stored in the same transaction as its effect, so a replay or a concurrent redelivery changes nothing, and a failed effect is retried by Stripe. A PaymentIntent must name one of our Stripe orders, match the stored reference and carry exactly the order's amount and currency; live events are refused by a test-mode store. A charge whose outcome is unknown (a timeout) is never treated as a decline, and money that arrives for an order already cancelled is refunded ([ADR 0003](docs/adr/0003-stripe-payment-intents-and-webhooks.md)). |
 | **Audit trail** | Append-only `AuditLog` for admin create/update/delete, order transitions, role changes, logins, failed logins, password changes and refresh-token reuse, with actor, diff, client IP (proxy-aware) and request ID. |
 | **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`). |
 | **Image scanning** | CI scans every image compose runs with Trivy ([`scripts/scan_images.sh`](scripts/scan_images.sh)) and fails on any HIGH or CRITICAL vulnerability that has a fix. Trivy itself is a pinned release checked against a SHA-256 taken from its Sigstore-verified checksums file. Accepted findings live in [`.trivyignore.yaml`](.trivyignore.yaml): one entry per CVE, scoped to one file, with evidence and an expiry date at most 90 days out, after which the gate fails again ([ADR 0001](docs/adr/0001-container-image-scanning.md)). Dockerfiles are linted with hadolint. |
@@ -161,6 +163,23 @@ Open <http://localhost:8080> (change the port with `HTTP_PORT` in `.env`). Every
 | Customer | `maya@example.com` | `SecureCart!Demo1` |
 
 The sign-in page has one-click buttons for both (hide them with `VITE_DEMO_MODE=false`). At checkout, choose **Test card: approve** or **Test card: decline**. No real payment is processed.
+
+### Stripe test mode (optional)
+
+The mock provider is the default and needs nothing. To take real test-mode payments through Stripe with your own account:
+
+```bash
+# 1. In a second terminal, forward Stripe's events to the local stack and note the whsec_...
+stripe listen --forward-to localhost:8080/api/payments/webhooks/stripe/
+# 2. Add to .env (test keys only: live keys are refused unless STRIPE_ALLOW_LIVE_MODE=true)
+PAYMENT_PROVIDER=apps.payments.providers.stripe_provider.StripePaymentProvider
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+# 3. Restart the API
+docker compose up -d --build backend
+```
+
+Checkout then offers Stripe's test methods (`pm_card_visa` approves, `pm_card_chargeDeclined` declines). An approved order answers `202` and shows "Confirming your payment" until `payment_intent.succeeded` arrives through `stripe listen`. `stripe trigger payment_intent.succeeded` exercises the endpoint, but its event names no SecureCart order, so it is acknowledged and ignored. CI never needs keys: it runs against `stripe/stripe-mock` and webhook fixtures signed with Stripe's algorithm.
 
 ### Local development
 
@@ -206,7 +225,10 @@ All configuration comes from environment variables, and the defaults are the sec
 | `THROTTLE_ANON` / `THROTTLE_USER` | `120/min` / `600/min` | Global limits for everything else |
 | `NUM_PROXIES` | `0` | Trusted proxy hops for client IPs (`1` behind nginx) |
 | `DJANGO_HSTS_SECONDS` / `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_BEHIND_TLS_PROXY` | `0` / `false` / `false` | TLS hardening for real deployments |
-| `PAYMENT_PROVIDER` | `apps.payments.providers.mock.MockPaymentProvider` | Dotted path to a `PaymentProvider` subclass |
+| `PAYMENT_PROVIDER` | `apps.payments.providers.mock.MockPaymentProvider` | Dotted path to a `PaymentProvider` subclass (`apps.payments.providers.stripe_provider.StripePaymentProvider` for Stripe) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | *(empty)* | Stripe test-mode secret key and webhook signing secret; both are required when Stripe is the provider |
+| `STRIPE_ALLOW_LIVE_MODE` | `false` | Live keys are refused unless this is `true` |
+| `STRIPE_API_BASE` / `STRIPE_TIMEOUT_SECONDS` / `STRIPE_MAX_NETWORK_RETRIES` / `STRIPE_WEBHOOK_TOLERANCE_SECONDS` | `https://api.stripe.com` / `10` / `2` / `300` | Client settings (the base is pointed at stripe-mock in tests) |
 | `STORE_CURRENCY`, `FREE_SHIPPING_THRESHOLD`, `FLAT_SHIPPING_FEE`, `TAX_RATE`, `MAX_CART_LINE_QUANTITY` | `USD`, `75.00`, `6.99`, `0.08`, `10` | Store pricing rules |
 | `RUN_MIGRATIONS` / `SEED_DEMO` | `true` / `false` (`true` in compose) | Container start-up tasks |
 | `DEMO_ADMIN_PASSWORD` / `DEMO_CUSTOMER_PASSWORD` | see the demo table | Passwords used by `seed_demo` |
@@ -232,7 +254,8 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 | Recovery | `POST /api/auth/password/forgot/` (always `202`) · `POST /api/auth/password/reset/` · `POST /api/auth/email/verify/` · `POST /api/auth/email/resend/` (authenticated) | Public / authenticated |
 | Catalog | `GET /api/products/` (`search`, `category`, `min_price`, `max_price`, `in_stock`, `featured`, `ordering`, `page`) · `GET /api/products/{slug}/` · `GET /api/categories/` | Public |
 | Cart | `GET/DELETE /api/cart/` · `POST /api/cart/items/` · `PATCH/DELETE /api/cart/items/{id}/` | Customer (own cart) |
-| Checkout | `POST /api/checkout/` with an `Idempotency-Key` header: `201`, `200` (replay), `402` (declined), `409` (stock or empty cart) | Customer |
+| Checkout | `POST /api/checkout/` with an `Idempotency-Key` header: `201`, `200` (replay), `202` (Stripe: awaiting the webhook), `402` (declined), `403` (address not confirmed), `409` (stock or empty cart) | Customer |
+| Payments | `GET /api/payments/config/` (provider, mode, test methods) · `POST /api/payments/webhooks/stripe/` (Stripe-signed) | Public |
 | Orders | `GET /api/orders/` · `GET /api/orders/{id}/` · `POST /api/orders/{id}/cancel/` | Customer (own orders) |
 | Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` and `POST /api/admin/orders/{id}/transition/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
 | System | `GET /api/health/` | Public |
@@ -309,7 +332,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 
 ## Roadmap (future work, not implemented)
 
-- A real payment provider (Stripe or Razorpay in test mode) implementing the existing `PaymentProvider` interface, with webhook-driven status updates.
 - Product image uploads to object storage with server-side validation.
 - Invoice PDF generation.
 - Redis for caching and throttling, plus a scheduler for `expire_pending_orders`.

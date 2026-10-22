@@ -11,6 +11,7 @@ from unittest import mock
 import pytest
 from django.conf import settings
 from django.db import OperationalError, connection, connections, transaction
+from django.test import override_settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
@@ -19,9 +20,13 @@ from apps.accounts.models import TokenPurpose, User
 from apps.cart.models import Cart, CartItem
 from apps.catalog.models import Category, Product
 from apps.orders import checkout, state
-from apps.orders.models import Order, OrderStatus
-from apps.payments.providers.base import RefundResult
+from apps.orders.models import Order, OrderEvent, OrderStatus
+from apps.payments import registry
+from apps.payments.models import WebhookEvent
+from apps.payments.money import to_minor_units
+from apps.payments.providers.base import ChargeResult, RefundResult
 from apps.payments.providers.mock import APPROVE_TOKEN, MockPaymentProvider
+from tests import stripe_fixtures as fx
 
 BUYERS = 8
 STOCK = 3
@@ -261,3 +266,58 @@ def test_refresh_racing_a_revocation_never_leaves_a_live_session() -> None:
             assert client.post("/api/auth/refresh/", HTTP_X_CSRF_PROTECTION="1").status_code == 401
             client.credentials(HTTP_AUTHORIZATION=f"Bearer {pair.access}")
             assert client.get("/api/auth/me/").status_code == 401
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_deliveries_of_one_webhook_apply_once() -> None:
+    """Stripe may deliver an event twice at once; the order must be paid exactly once."""
+    if connection.vendor != "postgresql":
+        pytest.skip("needs real concurrent transactions")
+    category = Category.objects.create(name="Hooks", slug="hooks")
+    product = Product.objects.create(
+        name="Hook", slug="hook", sku="HK-1", category=category, price=Decimal("10.00"), stock=5
+    )
+    user = User.objects.create_user("hook@example.com", "x" * 12, full_name="H")
+    CartItem.objects.create(cart=Cart.objects.create(user=user), product=product, quantity=1)
+    stripe_settings = {
+        "PAYMENT_PROVIDER": "apps.payments.providers.stripe_provider.StripePaymentProvider",
+        "STRIPE_SECRET_KEY": "sk_test_fixture",
+        "STRIPE_WEBHOOK_SECRET": fx.WEBHOOK_SECRET,
+    }
+    registry._load.cache_clear()
+    try:
+        with override_settings(**stripe_settings):
+            with mock.patch(
+                "apps.payments.providers.stripe_provider.StripePaymentProvider.charge",
+                return_value=ChargeResult(True, "pi_race"),
+            ):
+                order = checkout.place_order(
+                    user,
+                    address=checkout.ShippingAddress("H", "1 Main St", "Town", "12345", "US"),
+                    payment_token="pm_card_visa",
+                    idempotency_key="hook-race-1",
+                ).order
+            payload = fx.event(
+                "payment_intent.succeeded",
+                fx.payment_intent(
+                    str(order.pk), intent_id="pi_race", amount=to_minor_units(order.total, "USD")
+                ),
+                event_id="evt_race",
+            )
+
+            def deliver() -> str:
+                response = APIClient().post(
+                    "/api/payments/webhooks/stripe/",
+                    data=payload,
+                    content_type="application/json",
+                    HTTP_STRIPE_SIGNATURE=fx.sign(payload),
+                )
+                return str(response.json()["outcome"])
+
+            outcomes = _race(6, deliver)
+    finally:
+        registry._load.cache_clear()
+    assert sorted(str(o) for o in outcomes) == ["duplicate"] * 5 + ["paid"], outcomes
+    assert WebhookEvent.objects.filter(event_id="evt_race").count() == 1
+    assert OrderEvent.objects.filter(order=order, to_status=OrderStatus.PAID).count() == 1

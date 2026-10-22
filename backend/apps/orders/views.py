@@ -68,6 +68,11 @@ class CheckoutView(APIView):
         responses={
             201: OrderSerializer,
             200: OpenApiResponse(OrderSerializer, description="Idempotent replay"),
+            202: OpenApiResponse(
+                OrderSerializer,
+                description="Payment started; the provider confirms it by webhook "
+                "(order stays pending_payment until then)",
+            ),
             402: OpenApiResponse(
                 description="Payment declined; stock released (also returned when replaying "
                 "a declined attempt's key)"
@@ -117,10 +122,12 @@ class CheckoutView(APIView):
                 order_id=str(result.order.pk),
             )
         order = _detail_queryset().get(pk=result.order.pk)
-        return Response(
-            OrderSerializer(order).data,
-            status=status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED,
-        )
+        if order.status == OrderStatus.PENDING_PAYMENT:
+            # The provider confirms asynchronously (webhook): accepted, not yet paid.
+            code: int = status.HTTP_202_ACCEPTED
+        else:
+            code = status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED
+        return Response(OrderSerializer(order).data, status=code)
 
 
 class OrderFilter(django_filters.FilterSet):
