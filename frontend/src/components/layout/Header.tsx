@@ -20,7 +20,9 @@ import { useAuth } from "@/auth/useAuth";
 import { BagPanel } from "@/components/store/BagPanel";
 import { useCart, useCategories } from "@/hooks/queries";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { onBagAdd } from "@/lib/bagCue";
 import { initials } from "@/lib/format";
+import { EASE_ENTRANCE, prefersReducedMotion } from "@/lib/motion";
 import { useTheme } from "@/lib/theme";
 
 import { LogoMark } from "./Logo";
@@ -137,10 +139,53 @@ function useBagCount() {
   };
 }
 
+/**
+ * The add-to-bag cue. When the bag accepts an item, the icon takes the accent colour for a
+ * moment (a state change, shown to everyone) and, unless reduced motion is preferred, gives
+ * one small spring-like bump (transform only). The count beside it updates as well.
+ */
+function useBagCue() {
+  const icon = useRef<HTMLSpanElement>(null);
+  const [lit, setLit] = useState(false);
+  useEffect(() => {
+    let timer = 0;
+    const unsubscribe = onBagAdd(() => {
+      setLit(true);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        setLit(false);
+      }, 1400);
+      const el = icon.current;
+      if (!el || prefersReducedMotion() || typeof el.animate !== "function") return;
+      el.animate(
+        [
+          { transform: "scale(1)" },
+          { transform: "scale(1.24)", offset: 0.35 },
+          { transform: "scale(0.96)", offset: 0.7 },
+          { transform: "scale(1)" },
+        ],
+        { duration: 480, easing: EASE_ENTRANCE },
+      );
+    });
+    return () => {
+      unsubscribe();
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return { icon, lit };
+}
+
 function BagIcon({ count }: { count: number }) {
+  const { icon, lit } = useBagCue();
   return (
     <>
-      <ShoppingBag className="size-[18px]" strokeWidth={1.75} aria-hidden />
+      <span
+        ref={icon}
+        className={clsx("flex", lit && "text-brand")}
+        data-bag-cue={lit || undefined}
+      >
+        <ShoppingBag className="size-[18px]" strokeWidth={1.75} aria-hidden />
+      </span>
       {count > 0 && (
         <span className="absolute top-[22px] left-[22px] flex h-4 min-w-4 items-center justify-center rounded-full bg-fg px-1 text-[10px] font-semibold text-bg tabular-nums">
           {count > 99 ? "99+" : count}
@@ -153,7 +198,9 @@ function BagIcon({ count }: { count: number }) {
 /** Popover on desktop, bottom drawer (vaul) on touch-sized screens. */
 function BagButton() {
   const { count, label } = useBagCount();
-  const desktop = useMediaQuery("(min-width: 768px)");
+  // Prerendered as the desktop popover trigger; phones swap in the drawer after hydration
+  // (the button looks identical either way).
+  const desktop = useMediaQuery("(min-width: 768px)", true);
   const [open, setOpen] = useState(false);
   const close = () => {
     setOpen(false);
@@ -301,7 +348,7 @@ function MobileMenu() {
   const small = "block py-1.5 text-[15px] font-medium text-fg/80 hover:text-fg";
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger className={iconButton} aria-label="Menu">
+      <Dialog.Trigger className={clsx(iconButton, "md:hidden")} aria-label="Menu">
         <Menu className="size-5" strokeWidth={1.75} aria-hidden />
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -377,7 +424,6 @@ export function Header() {
   const { status } = useAuth();
   const { data: categories } = useCategories();
   const location = useLocation();
-  const desktop = useMediaQuery("(min-width: 768px)");
   const currentCategory = new URLSearchParams(location.search).get("category");
 
   return (
@@ -421,26 +467,29 @@ export function Header() {
               <ShieldCheck className="size-3.5" aria-hidden /> Protection
             </span>
           </NavLink>
+          {/* Layout differences between phone and desktop are CSS, not script, so the
+              prerendered nav is already in its final shape on either (no layout shift). */}
           <SearchButton />
-          {desktop && <ThemeToggle />}
+          <ThemeToggle className="max-md:hidden" />
           <BagButton />
           {status === "authenticated" ? (
             <AccountMenu />
-          ) : status === "anonymous" && desktop ? (
-            <Link
-              to="/login"
-              className="hit ml-2 rounded-md px-1 text-[12px] text-fg/80 hover:text-fg"
-            >
-              Sign in
-            </Link>
           ) : status === "anonymous" ? (
-            <Link to="/login" className={iconButton} aria-label="Sign in">
-              <UserRound className="size-[18px]" strokeWidth={1.75} aria-hidden />
-            </Link>
+            <>
+              <Link
+                to="/login"
+                className="hit ml-2 rounded-md px-1 text-[12px] text-fg/80 hover:text-fg max-md:hidden"
+              >
+                Sign in
+              </Link>
+              <Link to="/login" className={clsx(iconButton, "md:hidden")} aria-label="Sign in">
+                <UserRound className="size-[18px]" strokeWidth={1.75} aria-hidden />
+              </Link>
+            </>
           ) : (
             <span className="size-11" aria-hidden />
           )}
-          {!desktop && <MobileMenu />}
+          <MobileMenu />
         </div>
       </div>
     </header>

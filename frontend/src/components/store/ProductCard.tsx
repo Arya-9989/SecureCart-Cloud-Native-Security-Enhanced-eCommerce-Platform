@@ -1,11 +1,14 @@
 import { clsx } from "clsx";
-import { Plus } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { Link } from "react-router";
 
 import { ProductImage, Skeleton } from "@/components/ui/misc";
 import { useAddToCart } from "@/hooks/queries";
+import { useAddedFlash } from "@/hooks/useAddedFlash";
 import { formatMoney } from "@/lib/format";
 import type { Product } from "@/lib/types";
+
+import { useProductLink } from "./useProductLink";
 
 function StockNote({ stock }: { stock: number }) {
   if (stock <= 0) return <p className="text-[13px] text-muted">Sold out</p>;
@@ -16,10 +19,12 @@ function StockNote({ stock }: { stock: number }) {
 /** Studio tile, product first: art on the sweep, then name, price and one quiet action. */
 export function ProductCard({ product }: { product: Product }) {
   const { add, isPending } = useAddToCart();
+  const [added, flashAdded] = useAddedFlash();
+  const { art, linkProps } = useProductLink(product);
   const soldOut = product.stock <= 0;
   return (
     <article className="group studio relative flex flex-col overflow-hidden rounded-[24px] transition-transform duration-300 ease-(--ease-apple) hover:-translate-y-0.5">
-      <div className="relative aspect-[4/3]" aria-hidden>
+      <div ref={art} className="relative aspect-[4/3]" aria-hidden>
         <ProductImage
           src={product.image_url}
           alt=""
@@ -34,6 +39,7 @@ export function ProductCard({ product }: { product: Product }) {
         <h3 className="mt-1 text-[17px] leading-snug font-semibold tracking-[-0.015em] text-fg">
           <Link
             to={`/products/${product.slug}`}
+            {...linkProps}
             className="block rounded-sm py-0.5 after:absolute after:inset-0 after:rounded-[24px] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
           >
             {product.name}
@@ -49,7 +55,7 @@ export function ProductCard({ product }: { product: Product }) {
           <button
             type="button"
             onClick={() => {
-              add(product.id, 1, product.name);
+              add(product, 1, { onAdded: flashAdded });
             }}
             disabled={soldOut || isPending}
             className={clsx(
@@ -58,10 +64,18 @@ export function ProductCard({ product }: { product: Product }) {
                 ? "cursor-not-allowed bg-surface-3 text-muted"
                 : "bg-brand-soft text-brand hover:bg-action hover:text-brand-fg disabled:opacity-60",
             )}
-            aria-label={soldOut ? `${product.name} is sold out` : `Add ${product.name} to bag`}
+            aria-label={
+              soldOut
+                ? `${product.name} is sold out`
+                : `${added ? "Added" : "Add"} ${product.name} to bag`
+            }
           >
-            {!soldOut && <Plus className="size-3.5" strokeWidth={2.25} aria-hidden />}
-            {soldOut ? "Sold out" : "Add"}
+            {soldOut ? null : added ? (
+              <Check className="size-3.5 animate-pop-in" strokeWidth={2.5} aria-hidden />
+            ) : (
+              <Plus className="size-3.5" strokeWidth={2.25} aria-hidden />
+            )}
+            {soldOut ? "Sold out" : added ? "Added" : "Add"}
           </button>
         </div>
       </div>

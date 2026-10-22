@@ -146,6 +146,7 @@
   --animate-shimmer: shimmer 1.6s linear infinite;
   --animate-fade-in: fade-in 240ms cubic-bezier(0.4, 0, 0.6, 1);
   --animate-slide-up: slide-up 320ms cubic-bezier(0.4, 0, 0.6, 1);
+  --animate-pop-in: pop-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes shimmer {
@@ -353,5 +354,307 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/*
+ * ---- Motion -----------------------------------------------------------------------------
+ * Every rule here follows the same contract:
+ *   - Nothing is hidden by default. The base styles are the final state, which is what a
+ *     visitor with JavaScript off or with reduced motion sees. Scroll-driven states only exist
+ *     inside @supports (animation-timeline: view()) plus prefers-reduced-motion: no-preference,
+ *     or behind a class that script adds after it has run (the .is-scripted fallbacks).
+ *   - Only opacity and transform animate, so nothing here can shift layout.
+ *   - Scroll-linked motion is scrubbed by the browser's own scroll position: never a
+ *     smooth-scroll library, never a hijacked wheel.
+ */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer components {
+  /* P7. The card's artwork and the product page's gallery share one name, so React Router's
+     view transition morphs the card into the page. Only the pressed card carries the name. */
+  [data-vt="product-art"] {
+    view-transition-name: product-art;
+  }
+
+  /* P1. /protection: the four moments. Static: the rail is fully lit and the four panels sit
+     in a grid. Scrubbed: the section is four screens tall, the stage pins, and each panel
+     takes its turn while the rail lights stage by stage. */
+  .moments.is-scripted {
+    height: 400svh;
+  }
+  .moments.is-scripted .moments-stage {
+    position: sticky;
+    top: 100px;
+    height: calc(100svh - 100px);
+  }
+  .moments.is-scripted .moments-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .moments.is-scripted .moments-panel {
+    grid-area: 1 / 1;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(product-art) {
+    animation-duration: 460ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* The rest of the page hands over quickly, so the artwork's flight carries the motion. */
+  ::view-transition-old(root) {
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  ::view-transition-new(root) {
+    animation-duration: 260ms;
+    animation-delay: 60ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+
+  @supports (animation-timeline: view()) {
+    /* P1, scrubbed natively (off the main thread). */
+    .moments {
+      height: 400svh;
+      view-timeline: --moments block;
+    }
+    .moments .moments-stage {
+      position: sticky;
+      top: 100px;
+      height: calc(100svh - 100px);
+    }
+    .moments .moments-panels {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .moments .moments-panel {
+      grid-area: 1 / 1;
+      text-align: center;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --moments;
+      animation-range: contain 0% contain 100%;
+    }
+    .moments .moments-panel:nth-child(1) {
+      animation-name: moment-1;
+    }
+    .moments .moments-panel:nth-child(2) {
+      animation-name: moment-2;
+    }
+    .moments .moments-panel:nth-child(3) {
+      animation-name: moment-3;
+    }
+    .moments .moments-panel:nth-child(4) {
+      animation-name: moment-4;
+    }
+    .moments .moments-rail-fill {
+      transform-origin: left center;
+      animation-name: rail-fill;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --moments;
+      animation-range: contain 0% contain 100%;
+    }
+    .moments li:not(:first-child) .moments-lit {
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --moments;
+      animation-range: contain 0% contain 100%;
+    }
+    .moments li:nth-child(2) .moments-lit {
+      animation-name: lit-2;
+    }
+    .moments li:nth-child(3) .moments-lit {
+      animation-name: lit-3;
+    }
+    .moments li:nth-child(4) .moments-lit {
+      animation-name: lit-4;
+    }
+
+    /* The checkout chapter: its four steps light up in order as the chapter passes. */
+    .checkout-steps-scope {
+      view-timeline: --checkout block;
+    }
+    .checkout-step-lit {
+      animation-name: step-lit;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --checkout;
+      animation-range: cover calc(22% + var(--step) * 9%) cover calc(27% + var(--step) * 9%);
+    }
+    .checkout-step-line {
+      transform-origin: top center;
+      animation-name: step-line;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --checkout;
+      animation-range: cover calc(27% + var(--step) * 9%) cover calc(31% + var(--step) * 9%);
+    }
+
+    /* Light depth on the home hero trio: as the page scrolls on, the lead product steps
+       forward and the two beside it recede. */
+    .hero-depth-lead,
+    .hero-depth-left,
+    .hero-depth-right {
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 85vh;
+    }
+    .hero-depth-lead {
+      animation-name: depth-lead;
+    }
+    .hero-depth-left {
+      animation-name: depth-left;
+    }
+    .hero-depth-right {
+      animation-name: depth-right;
+    }
+  }
+}
+
+@keyframes moment-1 {
+  0%,
+  21% {
+    opacity: 1;
+    transform: none;
+  }
+  24.5%,
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+@keyframes moment-2 {
+  0%,
+  24.5% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  28%,
+  46% {
+    opacity: 1;
+    transform: none;
+  }
+  49.5%,
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+@keyframes moment-3 {
+  0%,
+  49.5% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  53%,
+  71% {
+    opacity: 1;
+    transform: none;
+  }
+  74.5%,
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+@keyframes moment-4 {
+  0%,
+  74.5% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  78%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rail-fill {
+  from {
+    transform: scaleX(0);
+  }
+  75%,
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes lit-2 {
+  0%,
+  22% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  27%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lit-3 {
+  0%,
+  47% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  52%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lit-4 {
+  0%,
+  72% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  77%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes step-lit {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes step-line {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes depth-lead {
+  to {
+    transform: translateY(-4%) scale(1.04);
+  }
+}
+@keyframes depth-left {
+  to {
+    transform: translate(-5%, 5%) scale(0.92);
+  }
+}
+@keyframes depth-right {
+  to {
+    transform: translate(5%, 5%) scale(0.92);
   }
 }

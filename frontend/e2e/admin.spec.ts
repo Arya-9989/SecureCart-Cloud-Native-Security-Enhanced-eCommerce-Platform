@@ -13,6 +13,8 @@ test.describe("Admin", () => {
     // Recharts renders real SVG marks.
     await expect(page.locator(".recharts-area-curve")).toHaveCount(1);
     await expect(page.locator(".recharts-bar-rectangle").first()).toBeVisible();
+    // P8: the line draws in once and finishes as the plain, undashed chart.
+    await expect(page.locator(".recharts-area-curve")).toHaveCSS("stroke-dasharray", "none");
 
     await page.getByText("Show data table").click();
     const table = page.getByRole("table", { name: /Daily revenue/ });

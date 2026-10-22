@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import { AlertTriangle, ChevronRight, PackageCheck, XCircle } from "lucide-react";
 import { Link } from "react-router";
 import {
@@ -18,6 +19,7 @@ import {
 import { AdminPageHeader } from "@/components/layout/AdminLayout";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/misc";
+import { useDrawIn } from "@/hooks/useDrawIn";
 import { adminApi } from "@/lib/endpoints";
 import { STATUS_LABELS, formatMoney } from "@/lib/format";
 import type { DashboardStats, OrderStatus } from "@/lib/types";
@@ -321,6 +323,7 @@ function TopProducts({ stats }: { stats: DashboardStats }) {
                 <div
                   className="h-full rounded-full bg-series-1"
                   style={{ width: `${(product.units / maxUnits) * 100}%` }}
+                  data-meter
                 />
               </div>
               <span className="w-16 shrink-0 text-right text-[13px] text-muted tabular-nums">
@@ -422,6 +425,8 @@ export function DashboardPage() {
     queryKey: ["admin", "dashboard"],
     queryFn: adminApi.dashboard,
   });
+  const charts = useRef<HTMLDivElement>(null);
+  useDrawIn(charts, Boolean(stats));
 
   return (
     <>
@@ -434,7 +439,7 @@ export function DashboardPage() {
       ) : isLoading || !stats ? (
         <DashboardSkeleton />
       ) : (
-        <div className="space-y-4">
+        <div ref={charts} className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
             <RevenueChart stats={stats} />
             <StatusChart stats={stats} />

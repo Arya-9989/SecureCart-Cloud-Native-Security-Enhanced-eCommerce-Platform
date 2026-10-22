@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run prerender",
+    "prerender": "vite build --ssr src/entry-server.tsx --outDir .ssr && node scripts/prerender.mjs",
+    "prerender:capture": "vite build --ssr src/entry-server.tsx --outDir .ssr && node scripts/prerender.mjs --capture",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc -b --noEmit",

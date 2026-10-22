@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import re
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 import pytest
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
+from django.utils.text import slugify
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Role, User
+from apps.catalog.demo_data import CATEGORIES, PRODUCTS
 from apps.catalog.models import Product
 from apps.core.views import HealthView
 from apps.orders.models import Order, OrderStatus
@@ -195,3 +199,40 @@ class TestStoreRulesContract:
         assert rules["accessTokenMinutes"] == Decimal(self._default("JWT_ACCESS_MINUTES"))
         assert rules["refreshTokenDays"] == Decimal(self._default("JWT_REFRESH_DAYS"))
         assert f"{rules['signInAttemptsPerMinute']}/min" == self._default("THROTTLE_AUTH")
+
+
+class TestPrerenderSnapshotContract:
+    """The storefront prerenders its public pages from recorded catalog responses
+    (frontend/prerender/catalog.json). They must describe the catalog seed_demo creates, so the
+    HTML served before hydration never shows a product, price or stock level the store lacks."""
+
+    SNAPSHOT = Path(settings.BASE_DIR).parent / "frontend" / "prerender" / "catalog.json"
+
+    def _snapshot(self) -> dict[str, Any]:
+        if not self.SNAPSHOT.exists():
+            pytest.skip("frontend sources are not part of this checkout")
+        return cast(dict[str, Any], json.loads(self.SNAPSHOT.read_text(encoding="utf-8")))
+
+    def test_products_match_the_demo_catalog(self) -> None:
+        responses = self._snapshot()["responses"]
+        recorded = {p["sku"]: p for p in responses["/products/?page_size=100"]["results"]}
+        assert set(recorded) == {spec["sku"] for spec in PRODUCTS}
+        for spec in PRODUCTS:
+            product = recorded[spec["sku"]]
+            slug = slugify(spec["name"])
+            assert product["name"] == spec["name"]
+            assert product["slug"] == slug
+            assert product["price"] == spec["price"]
+            assert product["stock"] == spec["stock"]
+            assert product["is_featured"] == spec["featured"]
+            assert product["description"] == spec["description"]
+            assert product["category"]["slug"] == spec["category"]
+            assert product["image_url"] == f"/products/{slug}.svg"
+            assert responses[f"/products/{slug}/"] == product
+
+    def test_categories_match_the_demo_catalog(self) -> None:
+        recorded = self._snapshot()["responses"]["/categories/"]
+        assert {(c["name"], c["slug"], c["description"]) for c in recorded} == set(CATEGORIES)
+        for category in recorded:
+            expected = sum(1 for spec in PRODUCTS if spec["category"] == category["slug"])
+            assert category["product_count"] == expected
