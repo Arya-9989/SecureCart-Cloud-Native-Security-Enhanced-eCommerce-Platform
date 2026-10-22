@@ -113,8 +113,7 @@ function Footer() {
           </FooterColumn>
         </div>
         <p className="border-t border-line-strong/60 pt-4">
-          Copyright © {__BUILD_YEAR__} SecureCart. A portfolio project by Arya
-          Mahindrakar.
+          Copyright © {__BUILD_YEAR__} SecureCart. A portfolio project by Arya Mahindrakar.
         </p>
       </div>
     </footer>
