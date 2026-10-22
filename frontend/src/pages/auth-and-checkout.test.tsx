@@ -1,14 +1,31 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
+import { responseTo } from "@/test/network";
 import { admin, customer, makeOrder, server } from "@/test/server";
 import { renderApp } from "@/test/utils";
+
+/*
+ * Every wait in this file is tied to a real milestone: an MSW response (session restored,
+ * bag loaded, order placed) or a module that has finished loading. Nothing races a
+ * wall-clock deadline, so the suite behaves the same on an idle laptop and a loaded CI box.
+ */
+
+// The admin area is code-split. Compile it once, up front, so no test races a cold import
+// of the charting library. This is a one-off module load, not a wait on app behaviour.
+beforeAll(async () => {
+  await Promise.all([
+    import("@/components/layout/AdminLayout"),
+    import("@/pages/admin/DashboardPage"),
+    import("@/pages/admin/AuditLogPage"),
+  ]);
+}, 60_000);
 
 describe("Login", () => {
   it("validates input before calling the API", async () => {
     const { user } = renderApp("/login");
-    await user.click(await screen.findByRole("button", { name: "Sign in" }));
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("Enter a valid email address")).toBeInTheDocument();
     expect(screen.getByText("Enter your password")).toBeInTheDocument();
   });
@@ -23,9 +40,11 @@ describe("Login", () => {
       ),
     );
     const { user } = renderApp("/login");
-    await user.type(await screen.findByLabelText("Email"), "maya@example.com");
+    await user.type(screen.getByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "wrong");
+    const answered = responseTo("POST", "/api/auth/login/");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await answered;
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid email or password.");
   });
 
@@ -37,12 +56,12 @@ describe("Login", () => {
       ),
     );
     const { user, router } = renderApp("/login?next=%2Forders");
-    await user.type(await screen.findByLabelText("Email"), "maya@example.com");
+    await user.type(screen.getByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "SecureCart!Demo1");
+    const ordersLoaded = responseTo("GET", "/api/orders/");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe("/orders");
-    });
+    await ordersLoaded;
+    expect(router.state.location.pathname).toBe("/orders");
     expect(await screen.findByText("No orders yet")).toBeInTheDocument();
   });
 
@@ -51,12 +70,21 @@ describe("Login", () => {
       http.post("*/api/auth/login/", () => HttpResponse.json({ access: "tok", user: customer })),
     );
     const { user, router } = renderApp("/login?next=%2F%2Fevil.example.com");
-    await user.type(await screen.findByLabelText("Email"), "maya@example.com");
+    await user.type(screen.getByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "x");
+    const answered = responseTo("POST", "/api/auth/login/");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await answered;
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/");
     });
+  });
+
+  it("explains how sign-in is protected", async () => {
+    const { user } = renderApp("/login");
+    await user.click(screen.getByText("Protected sign-in"));
+    expect(screen.getByText(/Passwords are hashed with Argon2/)).toBeVisible();
+    expect(screen.getByText(/httpOnly, Secure and SameSite=Strict/)).toBeVisible();
   });
 });
 
@@ -77,11 +105,13 @@ describe("Register", () => {
       ),
     );
     const { user } = renderApp("/register");
-    await user.type(await screen.findByLabelText("Full name"), "Maya Patel");
+    await user.type(screen.getByLabelText("Full name"), "Maya Patel");
     await user.type(screen.getByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "long-enough-pass");
     await user.type(screen.getByLabelText("Confirm password"), "long-enough-pass");
+    const answered = responseTo("POST", "/api/auth/register/");
     await user.click(screen.getByRole("button", { name: "Create account" }));
+    await answered;
     expect(
       await screen.findByText("An account with this email already exists."),
     ).toBeInTheDocument();
@@ -89,61 +119,89 @@ describe("Register", () => {
 
   it("checks that passwords match", async () => {
     const { user } = renderApp("/register");
-    await user.type(await screen.findByLabelText("Password"), "long-enough-pass");
+    await user.type(screen.getByLabelText("Password"), "long-enough-pass");
     await user.type(screen.getByLabelText("Confirm password"), "different-pass");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(await screen.findByText("Passwords don't match")).toBeInTheDocument();
   });
 });
 
+const DASHBOARD = {
+  currency: "USD",
+  revenue_total: "5120.00",
+  revenue_30d: "2100.00",
+  average_order_value: "160.00",
+  orders_total: 32,
+  orders_by_status: {
+    pending_payment: 0,
+    paid: 3,
+    shipped: 5,
+    delivered: 20,
+    cancelled: 2,
+    payment_failed: 2,
+  },
+  customers_total: 6,
+  products_active: 18,
+  revenue_by_day: [{ date: "2026-10-22", revenue: "120.00", orders: 1 }],
+  top_products: [
+    { product_id: 1, product_name: "Aurora Wireless Headphones", units: 9, revenue: "1701.00" },
+  ],
+  low_stock: [{ id: 3, name: "Arc Laptop Stand", sku: "WRK-ARC", stock: 0 }],
+};
+
 describe("Admin guard", () => {
   it("refuses customers", async () => {
+    const restored = responseTo("POST", "/api/auth/refresh/");
     renderApp("/admin", { user: customer });
+    await restored;
     expect(await screen.findByText("Administrator access required")).toBeInTheDocument();
   });
 
   it("renders the dashboard for admins", async () => {
-    server.use(
-      http.get("*/api/admin/dashboard/", () =>
-        HttpResponse.json({
-          currency: "USD",
-          revenue_total: "5120.00",
-          revenue_30d: "2100.00",
-          average_order_value: "160.00",
-          orders_total: 32,
-          orders_by_status: {
-            pending_payment: 0,
-            paid: 3,
-            shipped: 5,
-            delivered: 20,
-            cancelled: 2,
-            payment_failed: 2,
-          },
-          customers_total: 6,
-          products_active: 18,
-          revenue_by_day: [{ date: "2026-10-22", revenue: "120.00", orders: 1 }],
-          top_products: [
-            {
-              product_id: 1,
-              product_name: "Aurora Wireless Headphones",
-              units: 9,
-              revenue: "1701.00",
-            },
-          ],
-          low_stock: [{ id: 3, name: "Arc Laptop Stand", sku: "WRK-ARC", stock: 0 }],
-        }),
-      ),
-    );
+    server.use(http.get("*/api/admin/dashboard/", () => HttpResponse.json(DASHBOARD)));
+    const loaded = responseTo("GET", "/api/admin/dashboard/");
     renderApp("/admin", { user: admin });
+    await loaded;
     expect(await screen.findByText("$5,120.00")).toBeInTheDocument();
+    expect(screen.getByText("$2,100.00")).toBeInTheDocument();
     expect(screen.getByText("Out of stock")).toBeInTheDocument();
     expect(screen.getByText("Aurora Wireless Headphones")).toBeInTheDocument();
+    // The chart's numbers are also reachable without hovering: a captioned data table.
+    expect(screen.getByRole("table", { name: /Daily revenue/ })).toBeInTheDocument();
+  });
+
+  it("opens the command palette with Ctrl+K and navigates", async () => {
+    server.use(
+      http.get("*/api/admin/dashboard/", () => HttpResponse.json(DASHBOARD)),
+      http.get("*/api/admin/audit-logs/", () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
+    );
+    const loaded = responseTo("GET", "/api/admin/dashboard/");
+    const { user, router } = renderApp("/admin", { user: admin });
+    await loaded;
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    await user.type(within(palette).getByRole("combobox"), "audit");
+    const auditLoaded = responseTo("GET", "/api/admin/audit-logs/");
+    await user.keyboard("{Enter}");
+    await auditLoaded;
+    expect(router.state.location.pathname).toBe("/admin/audit-log");
   });
 });
 
 describe("Checkout", () => {
+  /** Opens /checkout and resolves once the session is restored and the bag has loaded. */
+  async function openCheckout() {
+    const bagLoaded = responseTo("GET", "/api/cart/");
+    const view = renderApp("/checkout", { user: customer });
+    await bagLoaded;
+    await screen.findByRole("heading", { name: "Checkout." });
+    return view;
+  }
+
   async function fillAddress(user: ReturnType<typeof renderApp>["user"]) {
-    await user.type(await screen.findByLabelText("Street address"), "1 Market Street");
+    await user.type(screen.getByLabelText("Street address"), "1 Market Street");
     await user.type(screen.getByLabelText("City"), "Austin");
     await user.type(screen.getByLabelText("Postal code"), "78701");
   }
@@ -159,9 +217,11 @@ describe("Checkout", () => {
       }),
       http.get("*/api/orders/:id/", () => HttpResponse.json(makeOrder())),
     );
-    const { user, router } = renderApp("/checkout", { user: customer });
+    const { user, router } = await openCheckout();
     await fillAddress(user);
+    const placed = responseTo("POST", "/api/checkout/");
     await user.click(screen.getByRole("button", { name: /Place order/ }));
+    await placed;
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/orders/${makeOrder().id}`);
     });
@@ -170,7 +230,10 @@ describe("Checkout", () => {
       payment_token: "tok_mock_approve",
       shipping_address: { name: "Maya Patel", city: "Austin", country: "US" },
     });
-    expect(await screen.findByText("Thank you. Your order is confirmed.")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Thank you. Your order is confirmed." }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Charged exactly once")).toBeInTheDocument();
   });
 
   it("explains a decline and uses a fresh key for the next attempt", async () => {
@@ -184,15 +247,17 @@ describe("Checkout", () => {
         );
       }),
     );
-    const { user } = renderApp("/checkout", { user: customer });
+    const { user } = await openCheckout();
     await fillAddress(user);
+    const first = responseTo("POST", "/api/checkout/");
     await user.click(screen.getByRole("button", { name: /Place order/ }));
+    await first;
     expect(await screen.findByText("Card declined (mock).")).toBeInTheDocument();
     expect(screen.getByText("Nothing was charged and your bag is unchanged.")).toBeInTheDocument();
+    const second = responseTo("POST", "/api/checkout/");
     await user.click(screen.getByRole("button", { name: /Place order/ }));
-    await waitFor(() => {
-      expect(keys).toHaveLength(2);
-    });
+    await second;
+    expect(keys).toHaveLength(2);
     expect(keys[0]).not.toBe(keys[1]);
   });
 
@@ -213,11 +278,29 @@ describe("Checkout", () => {
         ),
       ),
     );
-    const { user } = renderApp("/checkout", { user: customer });
+    const { user } = await openCheckout();
     await fillAddress(user);
+    const answered = responseTo("POST", "/api/checkout/");
     await user.click(screen.getByRole("button", { name: /Place order/ }));
+    await answered;
     expect(
       await screen.findByText("Aurora Wireless Headphones: requested 3, 1 available"),
     ).toBeInTheDocument();
+  });
+
+  it("validates a field inline as soon as you leave it", async () => {
+    let calls = 0;
+    server.use(
+      http.post("*/api/checkout/", () => {
+        calls += 1;
+        return HttpResponse.json(makeOrder(), { status: 201 });
+      }),
+    );
+    const { user } = await openCheckout();
+    await user.type(screen.getByLabelText("Postal code"), "!");
+    await user.tab();
+    expect(await screen.findByText("Enter a valid postal code")).toBeInTheDocument();
+    expect(screen.getByLabelText("Postal code")).toHaveAttribute("aria-invalid", "true");
+    expect(calls).toBe(0);
   });
 });

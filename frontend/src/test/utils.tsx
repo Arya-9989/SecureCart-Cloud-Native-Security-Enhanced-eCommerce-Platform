@@ -23,5 +23,6 @@ export function renderApp(path: string, { user = null }: { user?: User | null } 
       <RouterProvider router={router} />
     </Providers>,
   );
-  return { ...result, router, client, user: userEvent.setup() };
+  // No artificial per-keystroke delay: typing is driven by events, not by the wall clock.
+  return { ...result, router, client, user: userEvent.setup({ delay: null }) };
 }
