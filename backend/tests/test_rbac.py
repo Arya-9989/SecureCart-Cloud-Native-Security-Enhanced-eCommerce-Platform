@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
+from django.urls import URLPattern, URLResolver, get_resolver
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Role, User
@@ -20,6 +23,48 @@ ADMIN_READ_ENDPOINTS = [
     "/api/admin/users/",
     "/api/admin/audit-logs/",
 ]
+
+
+def _admin_routes() -> list[str]:
+    """Every concrete URL under /api/admin/, read from the URL configuration itself.
+
+    Path parameters are filled with a placeholder: permissions are checked before any object
+    lookup, so the placeholder never needs to exist.
+    """
+    routes: set[str] = set()
+
+    def walk(patterns: list[URLPattern | URLResolver], prefix: str) -> None:
+        for entry in patterns:
+            route = prefix + str(entry.pattern)
+            if isinstance(entry, URLResolver):
+                walk(entry.url_patterns, route)
+            elif route.startswith("api/admin/") and "(?P<format>" not in route:
+                # Router regexes ("^products/(?P<pk>[^/.]+)/$") and path converters ("<pk>").
+                path = re.sub(r"\(\?P<[^>]+>[^)]+\)|<[^>]+>", "1", route)
+                routes.add("/" + path.replace("^", "").replace("$", ""))
+
+    walk(get_resolver().url_patterns, "")
+    return sorted(routes)
+
+
+ADMIN_ROUTES = _admin_routes()
+METHODS = ["get", "post", "put", "patch", "delete"]
+
+
+def test_route_discovery_finds_every_admin_area() -> None:
+    joined = " ".join(ADMIN_ROUTES)
+    for area in ["dashboard", "products", "categories", "orders", "users", "audit-logs"]:
+        assert f"/api/admin/{area}/" in joined
+    assert "/api/admin/orders/1/transition/" in ADMIN_ROUTES
+
+
+@pytest.mark.parametrize("method", METHODS)
+@pytest.mark.parametrize("url", ADMIN_ROUTES)
+def test_no_admin_route_answers_anyone_but_an_admin(
+    api: APIClient, customer_api: APIClient, url: str, method: str
+) -> None:
+    assert getattr(api, method)(url, {}, format="json").status_code == 401
+    assert getattr(customer_api, method)(url, {}, format="json").status_code == 403
 
 
 @pytest.mark.parametrize("url", ADMIN_READ_ENDPOINTS)
