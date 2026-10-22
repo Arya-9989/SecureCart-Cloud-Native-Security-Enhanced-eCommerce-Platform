@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework_simplejwt.exceptions import TokenBackendError, TokenError
 from rest_framework_simplejwt.state import token_backend
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -56,11 +57,28 @@ def rotate(raw_refresh: str) -> tuple[User, TokenPair]:
         raise RefreshRejected(str(exc), reuse_detected_for=reused_by) from exc
 
     user_id = old.payload.get(_jwt()["USER_ID_CLAIM"])
-    user = User.objects.filter(pk=user_id, is_active=True).first() if user_id else None
-    old.blacklist()
+    jti = old.payload.get(_jwt().get("JTI_CLAIM", "jti"))
+    pair: TokenPair | None = None
+    with transaction.atomic():
+        # Requests presenting the same token queue on its row, so "is it still unused?" and
+        # "mark it used" cannot interleave. A request that loses that race finds the token
+        # already blacklisted: it is a replay like any other and must not mint a second live
+        # session. Because it waited for the winner to commit, the winner's new token exists
+        # by now and is revoked along with the rest.
+        list(OutstandingToken.objects.select_for_update(of=("self",)).filter(jti=jti).order_by())
+        first_use = not BlacklistedToken.objects.filter(token__jti=jti).exists()
+        old.blacklist()
+        user = User.objects.filter(pk=user_id, is_active=True).first() if user_id else None
+        if user is not None:
+            if first_use:
+                pair = issue_tokens(user)
+            else:
+                revoke_all(user)
     if user is None:
         raise RefreshRejected("User is inactive or no longer exists.")
-    return user, issue_tokens(user)
+    if pair is None:
+        raise RefreshRejected("Token was already rotated.", reuse_detected_for=user)
+    return user, pair
 
 
 def revoke(raw_refresh: str) -> None:

@@ -8,7 +8,9 @@ import pytest
 from django.conf import settings
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts import tokens
 from apps.accounts.models import Role, User
 from apps.accounts.throttles import AuthRateThrottle
 from apps.audit.models import AuditLog
@@ -127,6 +129,15 @@ class TestLogin:
                 refresh(api)
             assert login(api, "customer@example.com").status_code == 200
 
+    def test_password_change_is_rate_limited_per_ip(self, customer_api: APIClient) -> None:
+        # A stolen access token must not allow unlimited guesses at the current password.
+        attempt = {"current_password": "guess-0000000", "new_password": "An0ther-Strong-Pass"}
+        with mock.patch.object(AuthRateThrottle, "get_rate", return_value="3/min"):
+            statuses = [
+                customer_api.post("/api/auth/password/", attempt).status_code for _ in range(4)
+            ]
+        assert statuses == [400, 400, 400, 429]
+
 
 class TestRefreshRotation:
     def test_requires_csrf_header(self, api: APIClient, customer: User) -> None:
@@ -162,6 +173,21 @@ class TestRefreshRotation:
         # ...and the legitimate client's *new* token is now revoked too.
         assert refresh(api).status_code == 401
         assert AuditLog.objects.filter(action="auth.refresh_reuse_detected").exists()
+        outstanding = OutstandingToken.objects.filter(user=customer).count()
+        assert BlacklistedToken.objects.filter(token__user=customer).count() == outstanding
+
+    def test_losing_a_concurrent_rotation_counts_as_reuse(self, customer: User) -> None:
+        # Two requests present the same refresh token at the same moment: both pass the
+        # blacklist check before either has written to it. Only one may get a new pair, and
+        # the other is a replay that must revoke the whole session family.
+        raw = tokens.issue_tokens(customer).refresh
+        tokens.rotate(raw)  # the request that won the race
+        with (
+            mock.patch.object(RefreshToken, "check_blacklist"),  # loser was verified earlier
+            pytest.raises(tokens.RefreshRejected) as rejected,
+        ):
+            tokens.rotate(raw)
+        assert rejected.value.reuse_detected_for == customer
         outstanding = OutstandingToken.objects.filter(user=customer).count()
         assert BlacklistedToken.objects.filter(token__user=customer).count() == outstanding
 

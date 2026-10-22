@@ -1,14 +1,17 @@
-"""Proves that concurrent checkouts cannot oversell. Needs PostgreSQL row-level locks."""
+"""Concurrency guarantees that only real parallel transactions can prove (PostgreSQL only)."""
 
 from __future__ import annotations
 
 import threading
 import uuid
+from collections.abc import Callable
 from decimal import Decimal
 
 import pytest
 from django.db import connection, connections
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
+from apps.accounts import tokens
 from apps.accounts.models import User
 from apps.cart.models import Cart, CartItem
 from apps.catalog.models import Category, Product
@@ -73,3 +76,47 @@ def test_parallel_checkouts_never_oversell() -> None:
     assert outcomes.count("sold_out") == BUYERS - STOCK
     assert product.stock == 0
     assert Order.objects.filter(status=OrderStatus.PAID).count() == STOCK
+
+
+def _race(workers: int, work: Callable[[], object]) -> list[object]:
+    """Run ``work()`` in ``workers`` threads released together; return each outcome."""
+    barrier = threading.Barrier(workers)
+    outcomes: list[object] = []
+    lock = threading.Lock()
+
+    def run() -> None:
+        try:
+            barrier.wait()
+            result: object = work()
+        except Exception as exc:  # the outcome under test
+            result = exc
+        finally:
+            connections.close_all()
+        with lock:
+            outcomes.append(result)
+
+    threads = [threading.Thread(target=run) for _ in range(workers)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    return outcomes
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_parallel_refreshes_with_one_token_never_both_succeed() -> None:
+    """Racing the legitimate client with a stolen token must not mint two live sessions."""
+    if connection.vendor != "postgresql":
+        pytest.skip("needs real concurrent transactions")
+    user = User.objects.create_user("race@example.com", "x" * 12, full_name="R")
+    raw = tokens.issue_tokens(user).refresh
+
+    outcomes = _race(6, lambda: tokens.rotate(raw))
+    assert sum(not isinstance(o, Exception) for o in outcomes) <= 1
+    assert all(
+        isinstance(o, tokens.RefreshRejected) for o in outcomes if isinstance(o, Exception)
+    ), outcomes
+    if any(o.reuse_detected_for for o in outcomes if isinstance(o, tokens.RefreshRejected)):
+        # Reuse was detected, so every token in the family, including the winner's, is dead.
+        assert not OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
