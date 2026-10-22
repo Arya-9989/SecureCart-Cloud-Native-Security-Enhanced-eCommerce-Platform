@@ -1,3 +1,4 @@
+import { clsx } from "clsx";
 import { Plus } from "lucide-react";
 import { Link } from "react-router";
 
@@ -6,63 +7,60 @@ import { useAddToCart } from "@/hooks/queries";
 import { formatMoney } from "@/lib/format";
 import type { Product } from "@/lib/types";
 
+function StockNote({ stock }: { stock: number }) {
+  if (stock <= 0) return <p className="text-[13px] text-muted">Sold out</p>;
+  if (stock <= 5) return <p className="text-[13px] font-medium text-warning">Only {stock} left</p>;
+  return <p className="text-[13px] text-muted">In stock</p>;
+}
+
+/** Studio tile, product first: art on the sweep, then name, price and one quiet action. */
 export function ProductCard({ product }: { product: Product }) {
   const { add, isPending } = useAddToCart();
   const soldOut = product.stock <= 0;
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lift">
-      <Link
-        to={`/products/${product.slug}`}
-        className="relative block aspect-[4/3] overflow-hidden bg-surface-2"
-        tabIndex={-1}
-        aria-hidden
-      >
+    <article className="group studio relative flex flex-col overflow-hidden rounded-[24px] transition-transform duration-300 ease-(--ease-apple) hover:-translate-y-0.5">
+      <div className="relative aspect-[4/3]" aria-hidden>
         <ProductImage
           src={product.image_url}
           alt=""
-          className="size-full transition duration-500 group-hover:scale-[1.04]"
+          className="size-full scale-[1.12] transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.16]"
         />
-        <div className="absolute top-3 left-3 flex gap-1.5">
-          {product.is_featured && (
-            <span className="rounded-full bg-surface/90 px-2.5 py-1 text-[11px] font-semibold text-fg shadow-sm backdrop-blur">
-              Featured
-            </span>
-          )}
-          {soldOut ? (
-            <span className="rounded-full bg-fg/85 px-2.5 py-1 text-[11px] font-semibold text-bg backdrop-blur">
-              Sold out
-            </span>
-          ) : product.stock <= 5 ? (
-            <span className="rounded-full bg-warning-soft/95 px-2.5 py-1 text-[11px] font-semibold text-warning backdrop-blur">
-              Only {product.stock} left
-            </span>
-          ) : null}
-        </div>
-      </Link>
-      <div className="flex flex-1 flex-col p-4">
-        <p className="text-xs font-medium tracking-wide text-subtle uppercase">
+      </div>
+      <div className="flex flex-1 flex-col px-5 pb-5">
+        <p className="text-[12px] font-medium text-muted">
+          {product.is_featured ? "Featured · " : ""}
           {product.category.name}
         </p>
-        <h3 className="mt-1 text-[15px] leading-snug font-semibold text-fg">
+        <h3 className="mt-1 text-[17px] leading-snug font-semibold tracking-[-0.015em] text-fg">
           <Link
             to={`/products/${product.slug}`}
-            className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+            className="rounded-sm after:absolute after:inset-0 after:rounded-[24px] after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
           >
             {product.name}
           </Link>
         </h3>
-        <div className="mt-auto flex items-center justify-between pt-4">
-          <p className="text-lg font-bold tracking-tight text-fg">{formatMoney(product.price)}</p>
+        <div className="mt-auto flex items-end justify-between gap-3 pt-4">
+          <div>
+            <p className="text-[17px] tracking-[-0.015em] text-fg tabular-nums">
+              {formatMoney(product.price)}
+            </p>
+            <StockNote stock={product.stock} />
+          </div>
           <button
             type="button"
             onClick={() => {
               add(product.id, 1, product.name);
             }}
             disabled={soldOut || isPending}
-            className="relative z-10 inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-soft px-3 text-sm font-semibold text-brand transition hover:bg-brand hover:text-brand-fg disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-subtle"
-            aria-label={soldOut ? `${product.name} is sold out` : `Add ${product.name} to cart`}
+            className={clsx(
+              "hit relative z-10 inline-flex h-8 items-center gap-1 rounded-full px-3.5 text-[14px] font-medium transition-colors",
+              soldOut
+                ? "cursor-not-allowed bg-surface-3 text-muted"
+                : "bg-action text-brand-fg hover:bg-action-hover disabled:opacity-60",
+            )}
+            aria-label={soldOut ? `${product.name} is sold out` : `Add ${product.name} to bag`}
           >
-            <Plus className="size-4" aria-hidden />
+            {!soldOut && <Plus className="size-3.5" strokeWidth={2.25} aria-hidden />}
             {soldOut ? "Sold out" : "Add"}
           </button>
         </div>
@@ -73,14 +71,14 @@ export function ProductCard({ product }: { product: Product }) {
 
 export function ProductCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-      <Skeleton className="aspect-[4/3] rounded-none" />
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-3 w-20" />
+    <div className="overflow-hidden rounded-[24px] bg-surface-2" aria-hidden>
+      <div className="aspect-[4/3]" />
+      <div className="space-y-2.5 px-5 pb-5">
+        <Skeleton className="h-3 w-20 bg-surface-3" />
         <Skeleton className="h-4 w-3/4" />
-        <div className="flex items-center justify-between pt-3">
-          <Skeleton className="h-6 w-16" />
-          <Skeleton className="h-9 w-16 rounded-xl" />
+        <div className="flex items-end justify-between pt-4">
+          <Skeleton className="h-5 w-16" />
+          <Skeleton className="h-8 w-16 rounded-full" />
         </div>
       </div>
     </div>
@@ -99,10 +97,10 @@ export function ProductGrid({
   withSidebar?: boolean;
 }) {
   const columns = withSidebar
-    ? "min-[480px]:grid-cols-2 xl:grid-cols-3"
-    : "min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+    ? "min-[560px]:grid-cols-2 xl:grid-cols-3"
+    : "min-[560px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
   return (
-    <div className={`grid grid-cols-1 gap-5 ${columns}`}>
+    <div className={`grid grid-cols-1 gap-3 sm:gap-4 ${columns}`}>
       {loading && !products
         ? Array.from({ length: skeletons }, (_, i) => <ProductCardSkeleton key={i} />)
         : products?.map((product) => <ProductCard key={product.id} product={product} />)}

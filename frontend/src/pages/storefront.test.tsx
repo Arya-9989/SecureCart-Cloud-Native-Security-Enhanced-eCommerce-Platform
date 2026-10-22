@@ -36,10 +36,10 @@ describe("Shop page", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
-  it("sends anonymous shoppers to sign in when adding to cart", async () => {
+  it("sends anonymous shoppers to sign in when adding to the bag", async () => {
     const { user, router } = renderApp("/shop");
     await user.click(
-      await screen.findByRole("button", { name: "Add Aurora Wireless Headphones to cart" }),
+      await screen.findByRole("button", { name: "Add Aurora Wireless Headphones to bag" }),
     );
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/login");
@@ -62,7 +62,7 @@ describe("Product page", () => {
     expect(await screen.findByText("Product not found")).toBeInTheDocument();
   });
 
-  it("adds the chosen quantity to the cart for signed-in users", async () => {
+  it("adds the chosen quantity to the bag for signed-in users", async () => {
     let body: unknown = null;
     server.use(
       http.post("*/api/cart/items/", async ({ request }) => {
@@ -72,11 +72,29 @@ describe("Product page", () => {
     );
     const { user } = renderApp("/products/aurora-wireless-headphones", { user: customer });
     await user.click(await screen.findByRole("button", { name: "Increase quantity" }));
-    await user.click(screen.getByRole("button", { name: "Add to cart" }));
+    await user.click(screen.getByRole("button", { name: "Add to Bag" }));
     await waitFor(() => {
       expect(body).toEqual({ product_id: 1, quantity: 2 });
     });
-    expect(await screen.findByText("Added to cart")).toBeInTheDocument();
+    expect(await screen.findByText("Added to bag")).toBeInTheDocument();
+  });
+
+  it("switches gallery views and shows its protection cues", async () => {
+    const { user } = renderApp("/products/aurora-wireless-headphones");
+    const closeUp = await screen.findByRole("radio", { name: "Close-up" });
+    expect(screen.getByRole("radio", { name: "Studio view" })).toBeChecked();
+    await user.click(closeUp);
+    expect(closeUp).toBeChecked();
+    expect(screen.getByText("Never oversold")).toBeInTheDocument();
+    const storyLinks = screen.getAllByRole("link", { name: "How your order is protected" });
+    expect(storyLinks.map((link) => link.getAttribute("href"))).toContain("/protection#checkout");
+  });
+
+  it("compares the product with others in its category", async () => {
+    renderApp("/products/aurora-wireless-headphones");
+    const table = await screen.findByRole("table", { name: /compared with other Audio/ });
+    expect(within(table).getByText("Pulse Mini Speaker")).toBeInTheDocument();
+    expect(within(table).getByText("Only 3 left")).toBeInTheDocument();
   });
 });
 
@@ -98,7 +116,9 @@ describe("Cart page", () => {
       }),
     );
     const { user } = renderApp("/cart", { user: customer });
-    expect(await screen.findByRole("heading", { name: "Your cart" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Your bag total is $204.12." }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Increase quantity" }));
     await waitFor(() => {
       expect(patched).toEqual({ quantity: 2 });
@@ -120,7 +140,9 @@ describe("Cart page", () => {
     expect(
       await screen.findByText("No longer available. Remove it to continue."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Checkout/ })).toHaveAttribute("aria-disabled", "true");
+    for (const link of screen.getAllByRole("link", { name: "Check out" })) {
+      expect(link).toHaveAttribute("aria-disabled", "true");
+    }
   });
 
   it("shows the empty state", async () => {
@@ -128,6 +150,55 @@ describe("Cart page", () => {
       http.get("*/api/cart/", () => HttpResponse.json(makeCart({ items: [], item_count: 0 }))),
     );
     renderApp("/cart", { user: customer });
-    expect(await screen.findByText("Your cart is empty")).toBeInTheDocument();
+    expect(await screen.findByText("Your bag is empty.")).toBeInTheDocument();
+  });
+});
+
+describe("Bag drawer", () => {
+  it("previews the bag from the global nav", async () => {
+    const { user } = renderApp("/", { user: customer });
+    const bag = await screen.findByRole("button", { name: "Bag, 1 item" });
+    await user.click(bag);
+    const drawer = await screen.findByRole("dialog", { name: "Bag" });
+    expect(within(drawer).getByText("Aurora Wireless Headphones")).toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: "Check out" })).toHaveAttribute(
+      "href",
+      "/checkout",
+    );
+  });
+});
+
+describe("Protection page", () => {
+  it("tells the four-stage story and links each claim to its code", () => {
+    renderApp("/protection");
+    expect(
+      screen.getByRole("heading", { level: 1, name: /Trust you can read in the code/ }),
+    ).toBeInTheDocument();
+    for (const heading of [
+      "A session scripts can't read.",
+      "Live stock, honest limits.",
+      "Charged once. Never oversold.",
+      "Every change, on the record.",
+    ]) {
+      expect(screen.getByRole("heading", { level: 2, name: heading })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("link", { name: "backend/apps/orders/checkout.py" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/tree/main/backend/apps/orders/checkout.py"),
+    );
+  });
+});
+
+describe("Session restore", () => {
+  it("does not probe the refresh endpoint for a browser that never signed in", async () => {
+    let refreshCalls = 0;
+    server.events.on("request:start", ({ request }) => {
+      if (new URL(request.url).pathname === "/api/auth/refresh/") refreshCalls += 1;
+    });
+    renderApp("/shop");
+    expect(await screen.findByText("Aurora Wireless Headphones")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Sign in" }).length).toBeGreaterThan(0);
+    expect(refreshCalls).toBe(0);
+    server.events.removeAllListeners("request:start");
   });
 });

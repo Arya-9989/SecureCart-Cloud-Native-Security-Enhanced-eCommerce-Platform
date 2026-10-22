@@ -15,9 +15,9 @@ const HAPPY_PATH: { status: OrderStatus; label: string; icon: typeof Check }[] =
 export function OrderProgress({ order }: { order: Order }) {
   if (order.status === "cancelled" || order.status === "payment_failed") {
     return (
-      <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-4">
+      <div className="flex items-center gap-3 rounded-[18px] bg-surface-2 p-5">
         <XCircle className="size-5 shrink-0 text-danger" aria-hidden />
-        <p className="text-sm text-fg">
+        <p className="text-[15px] text-fg">
           <span className="font-semibold">{STATUS_LABELS[order.status]}.</span>{" "}
           {order.status === "cancelled"
             ? "Reserved stock was released and any payment was refunded."
@@ -38,20 +38,20 @@ export function OrderProgress({ order }: { order: Order }) {
               <span
                 className={clsx(
                   "absolute top-4 right-1/2 h-0.5 w-full -translate-y-1/2",
-                  index <= reached ? "bg-brand" : "bg-line-strong",
+                  index <= reached ? "bg-action" : "bg-line-strong",
                 )}
                 aria-hidden
               />
             )}
             <span
               className={clsx(
-                "relative z-10 flex size-8 items-center justify-center rounded-full ring-4 ring-surface",
-                done ? "bg-brand text-brand-fg" : "bg-surface-3 text-subtle",
+                "relative z-10 flex size-8 items-center justify-center rounded-full ring-4 ring-surface-2",
+                done ? "bg-action text-brand-fg" : "bg-surface-3 text-muted",
               )}
             >
               <Icon className="size-4" aria-hidden />
             </span>
-            <span className={clsx("mt-2 text-xs font-semibold", done ? "text-fg" : "text-subtle")}>
+            <span className={clsx("mt-2 text-[13px] font-medium", done ? "text-fg" : "text-muted")}>
               {step.label}
             </span>
             <span className="sr-only">{done ? "completed" : "pending"}</span>
@@ -70,14 +70,14 @@ export function OrderHistoryList({ order }: { order: Order }) {
           <span
             className={clsx(
               "mt-1.5 size-2 shrink-0 rounded-full",
-              index === 0 ? "bg-brand" : "bg-line-strong",
+              index === 0 ? "bg-action" : "bg-line-strong",
             )}
             aria-hidden
           />
           <div>
-            <p className="text-sm font-medium text-fg">{STATUS_LABELS[event.to_status]}</p>
-            {event.note && <p className="text-sm text-muted">{event.note}</p>}
-            <p className="text-xs text-subtle">{formatDateTime(event.created_at)}</p>
+            <p className="text-[15px] font-medium text-fg">{STATUS_LABELS[event.to_status]}</p>
+            {event.note && <p className="text-[14px] text-muted">{event.note}</p>}
+            <p className="text-[13px] text-muted">{formatDateTime(event.created_at)}</p>
           </div>
         </li>
       ))}

@@ -1,4 +1,6 @@
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
+import { Tooltip } from "radix-ui";
 import { useState, type ReactNode } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 
@@ -11,11 +13,18 @@ import { routes } from "@/routes";
 export function Providers({ children, client }: { children: ReactNode; client: QueryClient }) {
   return (
     <ThemeProvider>
-      <QueryClientProvider client={client}>
-        <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </ToastProvider>
-      </QueryClientProvider>
+      {/* Honour the OS reduced-motion setting everywhere; only the small DOM feature set loads. */}
+      <MotionConfig reducedMotion="user">
+        <LazyMotion features={domAnimation} strict>
+          <Tooltip.Provider delayDuration={300}>
+            <QueryClientProvider client={client}>
+              <ToastProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </ToastProvider>
+            </QueryClientProvider>
+          </Tooltip.Provider>
+        </LazyMotion>
+      </MotionConfig>
     </ThemeProvider>
   );
 }

@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { AlertCircle, CreditCard, Lock, ShieldCheck } from "lucide-react";
-import { useRef, useState } from "react";
+import { AlertCircle, CreditCard, KeyRound, Lock, RotateCcw } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useNavigate } from "react-router";
 import type { z } from "zod";
@@ -12,12 +12,12 @@ import { PriceSummary } from "@/components/store/PriceSummary";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { SelectField, TextField } from "@/components/ui/Field";
-import { PageSpinner } from "@/components/ui/Spinner";
-import { ProductImage } from "@/components/ui/misc";
+import { ProductImage, Skeleton } from "@/components/ui/misc";
 import { keys, useCart } from "@/hooks/queries";
 import { ApiError, errorMessage } from "@/lib/api";
 import { orderApi } from "@/lib/endpoints";
 import { formatMoney, newIdempotencyKey } from "@/lib/format";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { COUNTRIES, checkoutSchema } from "@/lib/validation";
 
 const PAYMENT_METHODS = [
@@ -42,6 +42,50 @@ interface StockProblem {
   available: number;
 }
 
+function Step({
+  number,
+  id,
+  title,
+  aside,
+  children,
+}: {
+  number: number;
+  id: string;
+  title: string;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={id}
+      className="border-t border-line py-10 first:border-t-0 first:pt-0"
+    >
+      <div className="flex items-baseline justify-between gap-4">
+        <h2
+          id={id}
+          className="flex items-baseline gap-3 text-[24px] leading-tight font-semibold tracking-[-0.02em] sm:text-[28px]"
+        >
+          <span className="text-muted tabular-nums" aria-hidden>
+            {number}.
+          </span>
+          {title}
+        </h2>
+        {aside}
+      </div>
+      <div className="mt-6">{children}</div>
+    </section>
+  );
+}
+
+function TrustNote({ icon: Icon, children }: { icon: typeof Lock; children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2.5 text-[14px] leading-snug text-muted">
+      <Icon className="mt-0.5 size-4 shrink-0 text-brand" strokeWidth={1.75} aria-hidden />
+      <span>{children}</span>
+    </p>
+  );
+}
+
 export function CheckoutPage() {
   const { user } = useAuth();
   const { data: cart, isLoading, error, refetch } = useCart();
@@ -49,9 +93,12 @@ export function CheckoutPage() {
   const queryClient = useQueryClient();
   const idempotencyKey = useRef(newIdempotencyKey());
   const [problem, setProblem] = useState<{ message: string; items?: StockProblem[] } | null>(null);
+  useDocumentTitle("Checkout");
 
   const form = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
+    // Inline validation: a field is checked when you leave it, then live as you fix it.
+    mode: "onTouched",
     defaultValues: {
       name: user?.full_name ?? "",
       line1: "",
@@ -92,7 +139,22 @@ export function CheckoutPage() {
       </div>
     );
   }
-  if (isLoading || !cart) return <PageSpinner label="Loading checkout" />;
+  if (isLoading || !cart) {
+    return (
+      <div className="container-page py-14" aria-busy="true" aria-label="Loading checkout">
+        <Skeleton className="h-12 w-56" />
+        <div className="mt-10 grid gap-12 lg:grid-cols-[1fr_360px]">
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-72" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+          <Skeleton className="h-80 rounded-[22px]" />
+        </div>
+      </div>
+    );
+  }
   if (cart.items.length === 0 && !placeOrder.isSuccess) return <Navigate to="/cart" replace />;
 
   const { register, handleSubmit, formState, watch } = form;
@@ -105,11 +167,18 @@ export function CheckoutPage() {
   const selectedToken = watch("payment_token");
 
   return (
-    <div className="container-page py-10">
-      <h1 className="text-3xl font-bold tracking-tight text-fg">Checkout</h1>
-      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted">
-        <Lock className="size-3.5" aria-hidden /> Signed in as {user?.email}
-      </p>
+    <div className="container-page pt-12 pb-24 sm:pt-16">
+      <header>
+        <h1 className="type-headline">Checkout.</h1>
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted">
+          <Lock className="size-4 text-brand" strokeWidth={1.75} aria-hidden />
+          Signed in as <span className="font-medium text-fg">{user?.email}</span>
+          <span aria-hidden>·</span>
+          <Link to="/protection#checkout" className="link">
+            How this checkout is protected
+          </Link>
+        </p>
+      </header>
 
       <form
         noValidate
@@ -119,13 +188,13 @@ export function CheckoutPage() {
             placeOrder.mutate(values);
           })(event);
         }}
-        className="mt-8 grid items-start gap-10 lg:grid-cols-[1fr_400px]"
+        className="mt-12 grid items-start gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-16"
       >
-        <div className="space-y-8">
+        <div className="min-w-0">
           {problem && (
             <div
               role="alert"
-              className="flex gap-3 rounded-2xl border border-danger/30 bg-danger-soft p-4 text-sm"
+              className="mb-10 flex gap-3 rounded-[18px] bg-danger-soft p-5 text-[15px]"
             >
               <AlertCircle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
               <div>
@@ -139,22 +208,19 @@ export function CheckoutPage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-1 text-fg">Nothing was charged and your cart is unchanged.</p>
+                  <p className="mt-1 text-fg">Nothing was charged and your bag is unchanged.</p>
                 )}
                 {problem.items && (
-                  <Link to="/cart" className="mt-2 inline-block font-semibold text-brand">
-                    Review your cart
+                  <Link to="/cart" className="link mt-2 inline-block">
+                    Review your bag
                   </Link>
                 )}
               </div>
             </div>
           )}
 
-          <section className="card p-6" aria-labelledby="shipping-heading">
-            <h2 id="shipping-heading" className="text-lg font-semibold text-fg">
-              Shipping address
-            </h2>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Step number={1} id="shipping-heading" title="Where should we send it?">
+            <div className="grid gap-5 sm:grid-cols-2">
               <TextField
                 label="Full name"
                 autoComplete="name"
@@ -202,73 +268,104 @@ export function CheckoutPage() {
                 ))}
               </SelectField>
             </div>
-          </section>
+          </Step>
 
-          <section className="card p-6" aria-labelledby="payment-heading">
-            <div className="flex items-center justify-between gap-4">
-              <h2 id="payment-heading" className="text-lg font-semibold text-fg">
-                Payment
-              </h2>
-              <span className="rounded-md bg-warning-soft px-2 py-1 text-xs font-semibold text-warning">
+          <Step
+            number={2}
+            id="payment-heading"
+            title="How would you like to pay?"
+            aside={
+              <span className="shrink-0 rounded-full bg-warning-soft px-2.5 py-1 text-[12px] font-medium text-warning">
                 Mock provider
               </span>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              No card details are collected. The client sends an opaque payment token, just as it
-              would after tokenising a card with a real provider.
-            </p>
-            <fieldset className="mt-5 grid gap-3 sm:grid-cols-2">
+            }
+          >
+            <fieldset className="grid gap-3 sm:grid-cols-2">
               <legend className="sr-only">Payment method</legend>
               {PAYMENT_METHODS.map((method) => (
                 <label
                   key={method.token}
                   className={clsx(
-                    "flex cursor-pointer gap-3 rounded-xl border p-4 transition",
+                    "flex cursor-pointer gap-3 rounded-[18px] border p-5 transition-colors",
                     selectedToken === method.token
-                      ? "border-brand bg-brand-soft/60 ring-4 ring-brand/10"
-                      : "border-line-strong hover:border-brand/40",
+                      ? "border-brand ring-1 ring-brand"
+                      : "border-line-strong hover:border-muted",
                   )}
                 >
                   <input
                     type="radio"
                     value={method.token}
-                    className="mt-1 accent-[var(--brand)]"
+                    className="mt-1 size-4 accent-[var(--action)]"
                     {...register("payment_token")}
                   />
                   <span>
-                    <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+                    <span className="flex items-center gap-2 text-[17px] font-semibold">
                       <CreditCard className="size-4 text-muted" aria-hidden />
                       {method.label}
                     </span>
-                    <span className="mt-1 block text-xs text-muted">{method.description}</span>
+                    <span className="mt-1 block text-[14px] text-muted">{method.description}</span>
                   </span>
                 </label>
               ))}
             </fieldset>
-          </section>
+            <div className="mt-5">
+              <TrustNote icon={KeyRound}>
+                No card details are collected. Your browser sends an opaque payment token, just as
+                it would after a real provider tokenised your card.
+              </TrustNote>
+            </div>
+          </Step>
+
+          <Step number={3} id="review-heading" title="Review and place your order.">
+            <ul className="divide-y divide-line" aria-label="Items in this order">
+              {cart.items.map((item) => (
+                <li key={item.id} className="flex items-center gap-4 py-3">
+                  <div className="studio size-16 shrink-0 overflow-hidden rounded-[14px]">
+                    <ProductImage
+                      src={item.product.image_url}
+                      alt=""
+                      className="size-full"
+                      sizes="sm"
+                    />
+                  </div>
+                  <p className="min-w-0 flex-1 text-[15px]">
+                    <span className="font-medium">{item.product.name}</span>
+                    <span className="block text-[13px] text-muted">Qty {item.quantity}</span>
+                  </p>
+                  <p className="text-[15px] tabular-nums">{formatMoney(item.line_total)}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-8 space-y-3">
+              <TrustNote icon={Lock}>
+                When you place the order, stock for every item is locked and reserved together, then
+                your payment is taken. If anything is short, nothing is charged.
+              </TrustNote>
+              <TrustNote icon={RotateCcw}>
+                Retrying is safe: each attempt carries an idempotency key, so you are never charged
+                twice.
+              </TrustNote>
+            </div>
+            <Button
+              type="submit"
+              size="lg"
+              className="mt-8 w-full sm:w-auto sm:min-w-72"
+              loading={placeOrder.isPending}
+            >
+              Place order · {formatMoney(cart.total, cart.currency)}
+            </Button>
+          </Step>
         </div>
 
-        <aside className="card p-6 lg:sticky lg:top-24" aria-label="Order summary">
-          <h2 className="text-lg font-semibold text-fg">Order summary</h2>
-          <ul className="mt-5 space-y-4">
-            {cart.items.map((item) => (
-              <li key={item.id} className="flex items-center gap-3">
-                <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2">
-                  <ProductImage src={item.product.image_url} alt="" className="size-full" />
-                  <span className="absolute -top-0 -right-0 flex size-5 items-center justify-center rounded-bl-lg bg-fg text-[10px] font-bold text-bg">
-                    {item.quantity}
-                  </span>
-                </div>
-                <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                  {item.product.name}
-                </p>
-                <p className="text-sm font-medium text-fg tabular-nums">
-                  {formatMoney(item.line_total)}
-                </p>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6 border-t border-line pt-6">
+        <aside
+          className="rounded-[22px] bg-surface-2 p-6 sm:p-7 lg:sticky lg:top-20"
+          aria-label="Order summary"
+        >
+          <h2 className="text-[21px] font-semibold tracking-[-0.02em]">Order summary</h2>
+          <p className="mt-1 text-[14px] text-muted">
+            {cart.item_count} item{cart.item_count === 1 ? "" : "s"}
+          </p>
+          <div className="mt-6">
             <PriceSummary
               subtotal={cart.subtotal}
               shipping={cart.shipping}
@@ -277,19 +374,9 @@ export function CheckoutPage() {
               currency={cart.currency}
             />
           </div>
-          <Button
-            type="submit"
-            size="lg"
-            className="mt-6 w-full"
-            loading={placeOrder.isPending}
-            icon={<ShieldCheck className="size-4" aria-hidden />}
-          >
-            Place order · {formatMoney(cart.total, cart.currency)}
-          </Button>
-          <p className="mt-3 text-center text-xs text-muted">
-            Retrying is safe: each attempt carries an idempotency key, so you are never charged
-            twice.
-          </p>
+          <Link to="/cart" className="link mt-6 inline-block text-[15px]">
+            Edit bag
+          </Link>
         </aside>
       </form>
     </div>

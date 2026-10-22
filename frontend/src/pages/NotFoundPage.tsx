@@ -3,10 +3,12 @@ import { Link } from "react-router";
 
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 export function NotFoundPage() {
+  useDocumentTitle("Page not found");
   return (
-    <div className="container-page py-20">
+    <div className="container-text py-20">
       <EmptyState
         icon={Compass}
         title="Page not found"

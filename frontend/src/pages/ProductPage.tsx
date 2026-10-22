@@ -1,36 +1,143 @@
-import { ChevronRight, PackageX, ShieldCheck, ShoppingBag, Truck } from "lucide-react";
-import { useState } from "react";
+import { clsx } from "clsx";
+import { Lock, PackageX, RefreshCcw, Truck } from "lucide-react";
+import { AnimatePresence, m } from "motion/react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useParams } from "react-router";
 
-import { ProductGrid } from "@/components/store/ProductCard";
+import { Shelf, ShelfItem } from "@/components/store/Shelf";
 import { Button } from "@/components/ui/Button";
 import { buttonClasses } from "@/components/ui/buttonClasses";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, QuantityStepper, Skeleton, StockBadge } from "@/components/ui/misc";
+import { Reveal } from "@/components/ui/Reveal";
 import { useAddToCart, useProduct, useProducts } from "@/hooks/queries";
 import { ApiError } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import type { Product } from "@/lib/types";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const MAX_PER_ORDER = 10;
+const FREE_SHIPPING_FROM = 75;
 
-function Related({ product }: { product: Product }) {
-  const { data, isLoading } = useProducts({ category: product.category.slug, page_size: 5 });
-  const related = data?.results.filter((p) => p.id !== product.id).slice(0, 4);
-  if (!isLoading && !related?.length) return null;
+/*
+ * Gallery views. The catalog has one studio illustration per product, so the second view
+ * is a true close-up of that same artwork rather than an invented angle.
+ */
+const VIEWS = [
+  { id: "studio", label: "Studio view", scale: 1 },
+  { id: "detail", label: "Close-up", scale: 1.65 },
+] as const;
+
+function Gallery({ product }: { product: Product }) {
+  const [index, setIndex] = useState(0);
+  const view = VIEWS[index] ?? VIEWS[0];
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "ArrowRight") setIndex((i) => (i + 1) % VIEWS.length);
+    if (event.key === "ArrowLeft") setIndex((i) => (i - 1 + VIEWS.length) % VIEWS.length);
+  };
   return (
-    <section className="mt-20" aria-labelledby="related-heading">
-      <h2 id="related-heading" className="text-xl font-bold text-fg">
-        More in {product.category.name}
-      </h2>
-      <div className="mt-6">
-        <ProductGrid products={related} loading={isLoading} skeletons={4} />
+    <div>
+      <div className="studio relative aspect-[4/3] overflow-hidden rounded-[28px]">
+        <AnimatePresence initial={false}>
+          <m.div
+            key={view.id}
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.4, 0, 0.6, 1] }}
+          >
+            <ProductImage
+              src={product.image_url}
+              alt={`${product.name}, ${view.label.toLowerCase()}`}
+              eager
+              className="size-full"
+              // Close-up: scale the same art around its optical centre.
+              style={{ transform: `scale(${view.scale})`, transformOrigin: "50% 62%" }}
+            />
+          </m.div>
+        </AnimatePresence>
       </div>
-    </section>
+      <div
+        role="radiogroup"
+        aria-label="Product views"
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="mt-4 flex justify-center"
+      >
+        <div className="flex items-center gap-1 rounded-full bg-surface-2 p-1">
+          {VIEWS.map((v, i) => (
+            <button
+              key={v.id}
+              type="button"
+              role="radio"
+              aria-checked={i === index}
+              tabIndex={i === index ? 0 : -1}
+              onClick={() => {
+                setIndex(i);
+              }}
+              className={clsx(
+                "hit rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors",
+                i === index ? "bg-surface text-fg shadow-card" : "text-muted hover:text-fg",
+              )}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
-function PurchasePanel({ product }: { product: Product }) {
+function TrustList({ product }: { product: Product }) {
+  const freeOnItsOwn = Number.parseFloat(product.price) >= FREE_SHIPPING_FROM;
+  const rows = [
+    {
+      icon: Truck,
+      title: freeOnItsOwn ? "Ships free" : `Free shipping from $${FREE_SHIPPING_FROM}`,
+      text: freeOnItsOwn
+        ? `This item alone clears the $${FREE_SHIPPING_FROM} free-shipping threshold.`
+        : "Below that, shipping is a flat $6.99.",
+    },
+    {
+      icon: Lock,
+      title: "Never oversold",
+      text: "Stock is locked and reserved the moment you place your order, all lines together.",
+    },
+    {
+      icon: RefreshCcw,
+      title: "Cancel until it ships",
+      text: "Cancelling puts the stock back and refunds the payment automatically.",
+    },
+  ];
+  return (
+    <ul className="mt-8 divide-y divide-line rounded-[18px] border border-line">
+      {rows.map(({ icon: Icon, title, text }) => (
+        <li key={title} className="flex gap-3.5 p-4">
+          <Icon className="mt-0.5 size-5 shrink-0 text-brand" strokeWidth={1.75} aria-hidden />
+          <div>
+            <p className="text-[15px] font-semibold">{title}</p>
+            <p className="text-[14px] text-muted">{text}</p>
+          </div>
+        </li>
+      ))}
+      <li className="p-4 text-[14px]">
+        <Link to="/protection#checkout" className="link">
+          How your order is protected
+        </Link>
+      </li>
+    </ul>
+  );
+}
+
+function PurchasePanel({
+  product,
+  buyRef,
+}: {
+  product: Product;
+  buyRef: React.RefObject<HTMLDivElement | null>;
+}) {
   const [quantity, setQuantity] = useState(1);
   const { add, isPending } = useAddToCart();
   const max = Math.max(1, Math.min(product.stock, MAX_PER_ORDER));
@@ -38,23 +145,35 @@ function PurchasePanel({ product }: { product: Product }) {
 
   return (
     <div className="flex flex-col">
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-muted">
-        <Link to="/shop" className="hover:text-fg">
-          Shop
-        </Link>
-        <ChevronRight className="size-3.5" aria-hidden />
-        <Link to={`/shop?category=${product.category.slug}`} className="hover:text-fg">
-          {product.category.name}
-        </Link>
+      <nav aria-label="Breadcrumb" className="text-[13px] text-muted">
+        <ol className="flex items-center gap-1.5">
+          <li>
+            <Link to="/shop" className="hover:text-fg hover:underline">
+              Shop
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li>
+            <Link
+              to={`/shop?category=${product.category.slug}`}
+              className="hover:text-fg hover:underline"
+            >
+              {product.category.name}
+            </Link>
+          </li>
+        </ol>
       </nav>
-      <h1 className="mt-3 text-3xl font-bold tracking-tight text-fg sm:text-4xl">{product.name}</h1>
-      <div className="mt-4 flex items-center gap-3">
-        <p className="text-3xl font-bold tracking-tight text-fg">{formatMoney(product.price)}</p>
+      {product.is_featured && <p className="type-eyebrow mt-4 text-muted">Featured</p>}
+      <h1 className={clsx("type-headline", product.is_featured ? "mt-1" : "mt-4")}>
+        {product.name}
+      </h1>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <p className="text-[24px] tracking-[-0.02em] tabular-nums">{formatMoney(product.price)}</p>
         <StockBadge stock={product.stock} />
       </div>
-      <p className="mt-6 text-base leading-relaxed text-muted">{product.description}</p>
+      <p className="type-body-lg mt-6 text-muted">{product.description}</p>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3">
+      <div ref={buyRef} className="mt-8 flex flex-wrap items-center gap-3">
         <QuantityStepper
           label="Quantity"
           value={quantity}
@@ -64,54 +183,239 @@ function PurchasePanel({ product }: { product: Product }) {
         />
         <Button
           size="lg"
-          className="min-w-48 flex-1 sm:flex-none"
+          className="min-w-44 flex-1 sm:flex-none"
           disabled={soldOut}
           loading={isPending}
-          icon={<ShoppingBag className="size-4" aria-hidden />}
           onClick={() => {
             add(product.id, quantity, product.name);
           }}
         >
-          {soldOut ? "Sold out" : "Add to cart"}
+          {soldOut ? "Sold out" : "Add to Bag"}
         </Button>
       </div>
       {!soldOut && product.stock <= 5 && (
-        <p className="mt-3 text-sm font-medium text-warning">
-          Low stock: only {product.stock} left.
+        <p className="mt-3 text-[14px] font-medium text-warning">
+          Only {product.stock} left. Stock is checked again when you place the order.
         </p>
       )}
-
-      <dl className="mt-10 grid grid-cols-1 gap-4 border-t border-line pt-8 text-sm sm:grid-cols-2">
-        <div className="flex items-start gap-3">
-          <Truck className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
-          <div>
-            <dt className="font-semibold text-fg">Shipping</dt>
-            <dd className="text-muted">Free over $75, otherwise $6.99 flat.</dd>
-          </div>
-        </div>
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
-          <div>
-            <dt className="font-semibold text-fg">Cancel any time before shipping</dt>
-            <dd className="text-muted">Refunded and restocked instantly.</dd>
-          </div>
+      <TrustList product={product} />
+      <dl className="mt-6 flex gap-8 text-[13px]">
+        <div>
+          <dt className="text-muted">SKU</dt>
+          <dd className="mt-0.5 font-mono text-fg">{product.sku}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold tracking-wider text-subtle uppercase">SKU</dt>
-          <dd className="mt-1 font-mono text-fg">{product.sku}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold tracking-wider text-subtle uppercase">Category</dt>
-          <dd className="mt-1 text-fg">{product.category.name}</dd>
+          <dt className="text-muted">Category</dt>
+          <dd className="mt-0.5 text-fg">{product.category.name}</dd>
         </div>
       </dl>
     </div>
   );
 }
 
+/** Appears under the global nav once the main Add to Bag button scrolls out of view. */
+function StickyBuyBar({
+  product,
+  buyRef,
+}: {
+  product: Product;
+  buyRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const [visible, setVisible] = useState(false);
+  const { add, isPending } = useAddToCart();
+  const soldOut = product.stock <= 0;
+
+  useEffect(() => {
+    const el = buyRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry) setVisible(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+      },
+      { rootMargin: "-48px 0px 0px 0px" },
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+    };
+  }, [buyRef]);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <m.div
+          className="glass fixed inset-x-0 top-12 z-30 border-b border-line/60"
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.24, ease: [0.4, 0, 0.6, 1] }}
+        >
+          <div className="container-page flex h-[52px] items-center gap-4">
+            <p className="min-w-0 truncate text-[17px] font-semibold tracking-[-0.02em]">
+              {product.name}
+            </p>
+            <p className="ml-auto hidden text-[14px] text-muted tabular-nums sm:block">
+              {formatMoney(product.price)}
+            </p>
+            <Button
+              size="sm"
+              className="ml-auto sm:ml-0"
+              disabled={soldOut}
+              loading={isPending}
+              onClick={() => {
+                add(product.id, 1, product.name);
+              }}
+            >
+              {soldOut ? "Sold out" : "Add to Bag"}
+            </Button>
+          </div>
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function availability(stock: number): string {
+  if (stock <= 0) return "Sold out";
+  if (stock <= 5) return `Only ${stock} left`;
+  return "In stock";
+}
+
+function Compare({ product, others }: { product: Product; others: Product[] }) {
+  const columns = [product, ...others.slice(0, 2)];
+  if (columns.length < 2) return null;
+  const rows: { label: string; value: (p: Product) => string }[] = [
+    { label: "Price", value: (p) => formatMoney(p.price) },
+    { label: "Availability", value: (p) => availability(p.stock) },
+    {
+      label: "Free shipping on its own",
+      value: (p) => (Number.parseFloat(p.price) >= FREE_SHIPPING_FROM ? "Yes" : "No"),
+    },
+    {
+      label: "Most per order",
+      value: (p) => (p.stock > 0 ? String(Math.min(p.stock, MAX_PER_ORDER)) : "—"),
+    },
+    { label: "SKU", value: (p) => p.sku },
+  ];
+  return (
+    <section className="py-20 sm:py-24" aria-labelledby="compare-heading">
+      <Reveal className="container-page">
+        <h2 id="compare-heading" className="type-section">
+          Compare {product.category.name}.
+        </h2>
+      </Reveal>
+      <div
+        className="container-page mt-10 overflow-x-auto"
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard scrolling
+        tabIndex={0}
+        role="region"
+        aria-label="Comparison table"
+      >
+        <table className="w-full min-w-[560px] table-fixed text-left">
+          <caption className="sr-only">
+            {product.name} compared with other {product.category.name} products
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" className="w-[28%] pb-6">
+                <span className="sr-only">Detail</span>
+              </th>
+              {columns.map((p) => (
+                <th key={p.id} scope="col" className="px-3 pb-6 align-top font-normal">
+                  <Link to={`/products/${p.slug}`} className="group block">
+                    <span className="studio block overflow-hidden rounded-[20px]">
+                      <ProductImage src={p.image_url} alt="" className="aspect-[4/3] w-full" />
+                    </span>
+                    <span className="mt-3 block text-[17px] font-semibold tracking-[-0.015em] group-hover:underline">
+                      {p.name}
+                    </span>
+                    <span className="block h-5 text-[13px] text-muted">
+                      {p.id === product.id ? "This product" : ""}
+                    </span>
+                  </Link>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line border-t border-line">
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <th scope="row" className="py-4 pr-3 text-[14px] font-medium text-muted">
+                  {row.label}
+                </th>
+                {columns.map((p) => (
+                  <td
+                    key={p.id}
+                    className={clsx(
+                      "px-3 py-4 text-[15px] tabular-nums",
+                      row.label === "SKU" && "font-mono text-[13px]",
+                    )}
+                  >
+                    {row.value(p)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function Related({ product }: { product: Product }) {
+  const { data, isLoading } = useProducts({ category: product.category.slug, page_size: 12 });
+  const others = data?.results.filter((p) => p.id !== product.id) ?? [];
+  if (isLoading) {
+    return (
+      <div className="container-page py-20" aria-hidden>
+        <Skeleton className="h-10 w-72" />
+      </div>
+    );
+  }
+  if (others.length === 0) return null;
+  return (
+    <>
+      <div className="bg-surface-2">
+        <Compare product={product} others={others} />
+      </div>
+      <section className="pt-20 pb-12 sm:pt-24" aria-labelledby="related-heading">
+        <Reveal className="container-page">
+          <h2 id="related-heading" className="type-section">
+            More in {product.category.name}.
+          </h2>
+        </Reveal>
+        <div className="mt-8">
+          <Shelf label={`More in ${product.category.name}`}>
+            {others.map((p) => (
+              <ShelfItem key={p.id} className="w-[70vw] max-w-[280px] sm:w-[280px]">
+                <Link to={`/products/${p.slug}`} className="studio group block rounded-[24px] p-5">
+                  <ProductImage
+                    src={p.image_url}
+                    alt=""
+                    className="aspect-[4/3] w-full transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.04]"
+                  />
+                  <span className="mt-3 block text-[17px] font-semibold tracking-[-0.015em]">
+                    {p.name}
+                  </span>
+                  <span className="text-[15px] text-muted tabular-nums">
+                    {formatMoney(p.price)}
+                  </span>
+                </Link>
+              </ShelfItem>
+            ))}
+          </Shelf>
+        </div>
+      </section>
+    </>
+  );
+}
+
 export function ProductPage() {
   const { slug = "" } = useParams();
   const { data: product, isLoading, error, refetch } = useProduct(slug);
+  const buyRef = useRef<HTMLDivElement>(null);
+  useDocumentTitle(product?.name ?? (error ? "Product not found" : undefined));
 
   if (error) {
     return (
@@ -135,32 +439,31 @@ export function ProductPage() {
   }
 
   return (
-    <div className="container-page py-10">
-      <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-        <div className="overflow-hidden rounded-3xl border border-line bg-surface-2 shadow-card">
+    <>
+      <div className="container-page pt-8 pb-16 sm:pt-12">
+        <div className="grid items-start gap-10 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
+          <div className="lg:sticky lg:top-20">
+            {isLoading || !product ? (
+              <Skeleton className="aspect-[4/3] rounded-[28px]" />
+            ) : (
+              <Gallery product={product} />
+            )}
+          </div>
           {isLoading || !product ? (
-            <Skeleton className="aspect-square rounded-none" />
+            <div className="space-y-4 pt-8" aria-hidden>
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-12 w-3/4" />
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-12 w-64 rounded-full" />
+            </div>
           ) : (
-            <ProductImage
-              src={product.image_url}
-              alt={product.name}
-              className="aspect-square w-full"
-            />
+            <PurchasePanel key={product.id} product={product} buyRef={buyRef} />
           )}
         </div>
-        {isLoading || !product ? (
-          <div className="space-y-4">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-10 w-3/4" />
-            <Skeleton className="h-8 w-40" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-12 w-64" />
-          </div>
-        ) : (
-          <PurchasePanel key={product.id} product={product} />
-        )}
       </div>
+      {product && <StickyBuyBar product={product} buyRef={buyRef} />}
       {product && <Related product={product} />}
-    </div>
+    </>
   );
 }

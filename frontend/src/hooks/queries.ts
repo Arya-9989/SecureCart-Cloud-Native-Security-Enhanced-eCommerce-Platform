@@ -54,12 +54,12 @@ function useCartMutation<TVars>(mutationFn: (vars: TVars) => Promise<Cart>) {
       queryClient.setQueryData(keys.cart, cart);
     },
     onError: (error) => {
-      toast.error("Couldn't update your cart", errorMessage(error));
+      toast.error("Couldn't update your bag", errorMessage(error));
     },
   });
 }
 
-/** Adds to cart, or sends anonymous shoppers to sign in and come back. */
+/** Adds to the bag, or sends anonymous shoppers to sign in and come back. */
 export function useAddToCart() {
   const { status } = useAuth();
   const navigate = useNavigate();
@@ -73,7 +73,7 @@ export function useAddToCart() {
     ...mutation,
     add: (productId: number, quantity: number, name: string) => {
       if (status !== "authenticated") {
-        toast.show("info", "Sign in to start your cart", "Your cart is saved to your account.");
+        toast.show("info", "Sign in to add to your bag", "Your bag is saved to your account.");
         void navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
         return;
       }
@@ -81,7 +81,7 @@ export function useAddToCart() {
         { productId, quantity, name },
         {
           onSuccess: () => {
-            toast.success("Added to cart", `${quantity} × ${name}`);
+            toast.success("Added to bag", `${quantity} × ${name}`);
           },
         },
       );

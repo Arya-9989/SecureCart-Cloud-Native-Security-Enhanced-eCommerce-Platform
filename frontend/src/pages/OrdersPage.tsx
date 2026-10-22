@@ -6,6 +6,7 @@ import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { OrderStatusBadge, Pagination, ProductImage, Skeleton } from "@/components/ui/misc";
 import { useOrders } from "@/hooks/queries";
 import { formatDate, formatMoney } from "@/lib/format";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 
 const PAGE_SIZE = 12;
 
@@ -13,19 +14,20 @@ export function OrdersPage() {
   const [params, setParams] = useSearchParams();
   const page = Number(params.get("page") ?? "1") || 1;
   const { data, isLoading, error, refetch } = useOrders(page);
+  useDocumentTitle("Orders");
 
   return (
-    <div className="container-page max-w-4xl py-10">
-      <h1 className="text-3xl font-bold tracking-tight text-fg">Your orders</h1>
-      <p className="mt-1 text-sm text-muted">Track deliveries and review past purchases.</p>
+    <div className="container-text pt-12 pb-24 sm:pt-16">
+      <h1 className="type-headline">Your orders.</h1>
+      <p className="mt-3 text-[17px] text-muted">Track deliveries and review past purchases.</p>
 
-      <div className="mt-8">
+      <div className="mt-10">
         {error ? (
           <ErrorState error={error} onRetry={() => void refetch()} />
         ) : isLoading || !data ? (
           <div className="space-y-4">
             {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+              <Skeleton key={i} className="h-24 w-full rounded-[22px]" />
             ))}
           </div>
         ) : data.results.length === 0 ? (
@@ -41,18 +43,18 @@ export function OrdersPage() {
           />
         ) : (
           <>
-            <ul className="space-y-3">
+            <ul className="divide-y divide-line border-y border-line">
               {data.results.map((order) => (
                 <li key={order.id}>
                   <Link
                     to={`/orders/${order.id}`}
-                    className="card group flex items-center gap-4 p-4 transition hover:border-brand/40 hover:shadow-lift sm:gap-6 sm:p-5"
+                    className="group flex items-center gap-4 py-5 sm:gap-6"
                   >
                     <div className="flex -space-x-3">
                       {order.preview_images.slice(0, 3).map((src, i) => (
                         <div
                           key={`${src}-${i}`}
-                          className="size-12 overflow-hidden rounded-xl border-2 border-surface bg-surface-2 sm:size-14"
+                          className="studio size-14 overflow-hidden rounded-[14px] ring-2 ring-bg sm:size-16"
                         >
                           <ProductImage src={src} alt="" className="size-full" sizes="sm" />
                         </div>
@@ -60,19 +62,21 @@ export function OrdersPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <p className="font-mono text-sm font-semibold text-fg">{order.number}</p>
+                        <p className="font-mono text-[15px] font-semibold text-fg group-hover:underline">
+                          {order.number}
+                        </p>
                         <OrderStatusBadge status={order.status} />
                       </div>
-                      <p className="mt-1 text-sm text-muted">
+                      <p className="mt-1 text-[14px] text-muted">
                         {formatDate(order.created_at)} · {order.item_count} item
                         {order.item_count === 1 ? "" : "s"}
                       </p>
                     </div>
-                    <p className="hidden font-semibold text-fg tabular-nums sm:block">
+                    <p className="hidden text-[17px] text-fg tabular-nums sm:block">
                       {formatMoney(order.total, order.currency)}
                     </p>
                     <ChevronRight
-                      className="size-5 text-subtle transition group-hover:translate-x-0.5 group-hover:text-brand"
+                      className="size-5 text-muted transition-transform group-hover:translate-x-0.5"
                       aria-hidden
                     />
                   </Link>

@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import { ChevronLeft, ChevronRight, ImageOff, Minus, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { STATUS_LABELS } from "@/lib/format";
 import type { OrderStatus } from "@/lib/types";
@@ -11,27 +11,33 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={clsx("skeleton", className)} aria-hidden />;
 }
 
+/**
+ * Product art is transparent and drawn for a studio backdrop, so callers wrap it in a
+ * `.studio` tile; the image is contained, never cropped. Width/height attributes reserve
+ * the 4:3 box before the SVG arrives (no layout shift).
+ */
 export function ProductImage({
   src,
   alt,
   className,
   sizes = "md",
+  eager = false,
+  style,
 }: {
   src: string;
   alt: string;
   className?: string;
   sizes?: "sm" | "md" | "lg";
+  eager?: boolean;
+  style?: CSSProperties;
 }) {
   const [failed, setFailed] = useState(!src);
   if (failed) {
     return (
       <div
-        className={clsx(
-          "flex items-center justify-center bg-gradient-to-br from-surface-2 to-surface-3 text-subtle",
-          className,
-        )}
+        className={clsx("flex items-center justify-center text-muted", className)}
         role="img"
-        aria-label={alt}
+        aria-label={alt || "Image unavailable"}
       >
         <ImageOff className={sizes === "sm" ? "size-4" : "size-8"} aria-hidden />
       </div>
@@ -41,12 +47,17 @@ export function ProductImage({
     <img
       src={src}
       alt={alt}
-      loading="lazy"
+      width={800}
+      height={600}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : undefined}
       decoding="async"
+      draggable={false}
       onError={() => {
         setFailed(true);
       }}
-      className={clsx("object-cover", className)}
+      className={clsx("object-contain", className)}
+      style={style}
     />
   );
 }
@@ -86,14 +97,17 @@ export function QuantityStepper({
   size?: "sm" | "md";
 }) {
   const button = clsx(
-    "flex items-center justify-center text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent",
-    size === "sm" ? "size-8" : "size-10",
+    "flex items-center justify-center rounded-full text-fg transition-colors hover:bg-surface-3 disabled:text-muted disabled:opacity-50 disabled:hover:bg-transparent",
+    size === "sm" ? "hit size-8" : "size-11",
   );
   return (
     <div
       role="group"
       aria-label={label}
-      className="inline-flex items-center overflow-hidden rounded-xl border border-line-strong bg-surface"
+      className={clsx(
+        "inline-flex items-center rounded-full bg-surface-2",
+        size === "sm" ? "p-0.5" : "p-0.5",
+      )}
     >
       <button
         type="button"
@@ -108,8 +122,8 @@ export function QuantityStepper({
       </button>
       <output
         className={clsx(
-          "text-center text-sm font-semibold tabular-nums",
-          size === "sm" ? "w-8" : "w-10",
+          "text-center font-medium tabular-nums",
+          size === "sm" ? "w-7 text-[14px]" : "w-9 text-[17px]",
         )}
         aria-live="polite"
       >
@@ -145,17 +159,20 @@ export function Pagination({
   if (pages <= 1) return null;
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(count, page * pageSize);
+  const button =
+    "inline-flex h-9 items-center gap-1 rounded-full border border-line-strong bg-surface px-4 text-[14px] font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-40 disabled:hover:bg-surface";
   return (
-    <nav aria-label="Pagination" className="flex items-center justify-between gap-4 pt-6">
-      <p className="text-sm text-muted">
-        Showing <span className="font-semibold text-fg">{from}</span>–
-        <span className="font-semibold text-fg">{to}</span> of{" "}
-        <span className="font-semibold text-fg">{count}</span>
+    <nav aria-label="Pagination" className="flex items-center justify-between gap-4 pt-8">
+      <p className="text-[14px] text-muted">
+        <span className="font-medium text-fg tabular-nums">
+          {from}–{to}
+        </span>{" "}
+        of <span className="font-medium text-fg tabular-nums">{count}</span>
       </p>
       <div className="flex gap-2">
         <button
           type="button"
-          className="inline-flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-3 text-sm font-medium text-fg transition hover:bg-surface-2 disabled:opacity-40"
+          className={clsx(button, "hit")}
           onClick={() => {
             onPage(page - 1);
           }}
@@ -165,7 +182,7 @@ export function Pagination({
         </button>
         <button
           type="button"
-          className="inline-flex h-9 items-center gap-1 rounded-lg border border-line-strong bg-surface px-3 text-sm font-medium text-fg transition hover:bg-surface-2 disabled:opacity-40"
+          className={clsx(button, "hit")}
           onClick={() => {
             onPage(page + 1);
           }}

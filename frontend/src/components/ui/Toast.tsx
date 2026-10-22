@@ -1,15 +1,10 @@
-import { clsx } from "clsx";
-import { CheckCircle2, Info, X, XCircle } from "lucide-react";
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { CheckCircle2, Info, XCircle } from "lucide-react";
+import { useMemo, type ReactNode } from "react";
+import { Toaster, toast } from "sonner";
+
+import { useTheme } from "@/lib/theme";
 
 type ToastTone = "success" | "error" | "info";
-
-interface ToastItem {
-  id: number;
-  tone: ToastTone;
-  title: string;
-  description?: string | undefined;
-}
 
 interface ToastApi {
   show: (tone: ToastTone, title: string, description?: string) => void;
@@ -17,86 +12,58 @@ interface ToastApi {
   error: (title: string, description?: string) => void;
 }
 
-const ToastContext = createContext<ToastApi | null>(null);
-let nextId = 1;
+const api: ToastApi = {
+  show: (tone, title, description) => {
+    const options = description ? { description } : undefined;
+    if (tone === "success") toast.success(title, options);
+    else if (tone === "error") toast.error(title, options);
+    else toast.info(title, options);
+  },
+  success: (title, description) => {
+    api.show("success", title, description);
+  },
+  error: (title, description) => {
+    api.show("error", title, description);
+  },
+};
 
-const icons = { success: CheckCircle2, error: XCircle, info: Info };
-const toneClass = { success: "text-success", error: "text-danger", info: "text-info" };
-
+/** Sonner, styled with the app's tokens. Errors stay longer than confirmations. */
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-
-  const dismiss = useCallback((id: number) => {
-    setToasts((current) => current.filter((t) => t.id !== id));
-  }, []);
-
-  const show = useCallback(
-    (tone: ToastTone, title: string, description?: string) => {
-      const id = nextId++;
-      setToasts((current) => [...current.slice(-3), { id, tone, title, description }]);
-      window.setTimeout(() => {
-        dismiss(id);
-      }, 4500);
-    },
-    [dismiss],
-  );
-
-  const api = useMemo<ToastApi>(
+  const { resolved } = useTheme();
+  const icons = useMemo(
     () => ({
-      show,
-      success: (title, description) => {
-        show("success", title, description);
-      },
-      error: (title, description) => {
-        show("error", title, description);
-      },
+      success: <CheckCircle2 className="size-5 text-success" aria-hidden />,
+      error: <XCircle className="size-5 text-danger" aria-hidden />,
+      info: <Info className="size-5 text-brand" aria-hidden />,
     }),
-    [show],
+    [],
   );
-
   return (
-    <ToastContext.Provider value={api}>
+    <>
       {children}
-      <div
-        aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6"
-      >
-        {toasts.map((toast) => {
-          const Icon = icons[toast.tone];
-          return (
-            <div
-              key={toast.id}
-              role={toast.tone === "error" ? "alert" : "status"}
-              className="pointer-events-auto flex w-full max-w-sm animate-slide-up items-start gap-3 rounded-2xl border border-line bg-surface p-4 shadow-pop"
-            >
-              <Icon className={clsx("mt-0.5 size-5 shrink-0", toneClass[toast.tone])} aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-fg">{toast.title}</p>
-                {toast.description && (
-                  <p className="mt-0.5 text-sm text-muted">{toast.description}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  dismiss(toast.id);
-                }}
-                className="rounded-md p-1 text-subtle hover:text-fg"
-                aria-label="Dismiss notification"
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </ToastContext.Provider>
+      <Toaster
+        theme={resolved}
+        position="bottom-right"
+        duration={4500}
+        gap={10}
+        icons={icons}
+        closeButton
+        containerAriaLabel="Notifications"
+        toastOptions={{
+          classNames: {
+            toast:
+              "!rounded-2xl !border-line !bg-surface !text-fg !shadow-pop !font-sans !text-[15px] !gap-3 !p-4",
+            title: "!font-semibold !text-fg",
+            description: "!text-muted !text-[14px]",
+            closeButton: "!bg-surface !border-line !text-muted",
+          },
+        }}
+      />
+    </>
   );
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useToast(): ToastApi {
-  const context = useContext(ToastContext);
-  if (!context) throw new Error("useToast must be used inside <ToastProvider>");
-  return context;
+  return api;
 }

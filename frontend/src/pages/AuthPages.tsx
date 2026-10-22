@@ -1,15 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { KeyRound, Lock, RefreshCcw, ShieldCheck } from "lucide-react";
+import { Check, ChevronDown, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useSearchParams } from "react-router";
 import { z } from "zod";
 
 import { useAuth } from "@/auth/useAuth";
-import { Logo } from "@/components/layout/Logo";
+import { Logo, LogoMark } from "@/components/layout/Logo";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { ApiError, errorMessage } from "@/lib/api";
+import { protection } from "@/lib/protection";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { safeNext } from "@/lib/validation";
 
 // Demo shortcuts for the seeded store. Disable with VITE_DEMO_MODE=false for real deployments.
@@ -23,66 +25,57 @@ function AuthShell({
   title,
   subtitle,
   children,
+  after,
 }: {
   title: string;
   subtitle: ReactNode;
   children: ReactNode;
+  after?: ReactNode;
 }) {
+  useDocumentTitle(title.replace(/\.$/, ""));
+  const signIn = protection("sign-in");
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="flex flex-col px-4 py-8 sm:px-10 lg:px-16">
-        <Logo />
-        <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
-          <h1 className="text-3xl font-bold tracking-tight text-fg">{title}</h1>
-          <p className="mt-2 text-sm text-muted">{subtitle}</p>
-          <div className="mt-8">{children}</div>
+    <div className="flex min-h-screen flex-col bg-bg">
+      <header className="glass sticky top-0 z-10 border-b border-line/60">
+        <div className="mx-auto flex h-12 max-w-[1024px] items-center justify-between px-4">
+          <Logo compact />
+          <Link to="/" className="hit text-[12px] text-fg/80 hover:text-fg">
+            Back to the store
+          </Link>
         </div>
-      </div>
-      <div className="relative hidden overflow-hidden bg-[#1e1b4b] lg:block">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(40rem 30rem at 80% 10%, rgba(129,140,248,.45), transparent 60%), radial-gradient(30rem 24rem at 10% 90%, rgba(45,212,191,.28), transparent 60%)",
-          }}
-          aria-hidden
-        />
-        <div className="relative flex h-full flex-col justify-end p-16 text-white">
-          <p className="text-sm font-semibold tracking-wider text-indigo-200 uppercase">
-            Security by design
-          </p>
-          <h2 className="mt-3 max-w-md text-3xl leading-tight font-bold">
-            Your session is protected at every step.
-          </h2>
-          <ul className="mt-8 max-w-md space-y-5">
-            {[
-              {
-                icon: KeyRound,
-                text: "Passwords hashed with Argon2, never stored or logged in plain text.",
-              },
-              {
-                icon: Lock,
-                text: "Short-lived access tokens kept in memory, not in browser storage.",
-              },
-              {
-                icon: RefreshCcw,
-                text: "Refresh tokens rotate on every use; a replayed token revokes the session.",
-              },
-              {
-                icon: ShieldCheck,
-                text: "Every admin action is permission-checked server-side and audited.",
-              },
-            ].map(({ icon: Icon, text }) => (
-              <li key={text} className="flex gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
-                  <Icon className="size-4.5" aria-hidden />
-                </span>
-                <span className="pt-1.5 text-sm leading-relaxed text-indigo-100">{text}</span>
-              </li>
-            ))}
-          </ul>
+      </header>
+      <main className="flex flex-1 flex-col items-center px-4 pt-14 pb-20 sm:pt-20">
+        <div className="w-full max-w-[440px]">
+          <LogoMark className="mx-auto size-12" />
+          <h1 className="mt-6 text-center text-[32px] leading-tight font-semibold tracking-[-0.025em] sm:text-[40px]">
+            {title}
+          </h1>
+          <p className="mt-3 text-center text-[17px] text-muted">{subtitle}</p>
+          <div className="mt-10">{children}</div>
+          {after}
+          <details className="group mt-10 rounded-[18px] bg-surface-2 p-5 open:pb-6">
+            <summary className="flex cursor-pointer list-none items-center gap-2.5 text-[15px] font-medium text-fg [&::-webkit-details-marker]:hidden">
+              <ShieldCheck className="size-5 text-brand" strokeWidth={1.75} aria-hidden />
+              <span className="flex-1">Protected sign-in</span>
+              <ChevronDown
+                className="size-4 text-muted transition-transform group-open:rotate-180"
+                aria-hidden
+              />
+            </summary>
+            <ul className="mt-4 space-y-2.5">
+              {signIn.details.map((detail) => (
+                <li key={detail} className="flex gap-2.5 text-[14px] leading-snug text-muted">
+                  <Check className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
+                  <span>{detail}</span>
+                </li>
+              ))}
+            </ul>
+            <Link to="/protection#sign-in" className="link mt-4 inline-block text-[14px]">
+              How your order is protected
+            </Link>
+          </details>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -119,13 +112,13 @@ export function LoginPage() {
 
   return (
     <AuthShell
-      title="Welcome back"
+      title="Sign in to SecureCart."
       subtitle={
         <>
           New to SecureCart?{" "}
           <Link
             to={`/register${params.get("next") ? `?next=${encodeURIComponent(next)}` : ""}`}
-            className="font-semibold text-brand hover:underline"
+            className="link"
           >
             Create an account
           </Link>
@@ -136,7 +129,7 @@ export function LoginPage() {
         {formError && (
           <p
             role="alert"
-            className="rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger"
+            className="flex items-start gap-2 rounded-[14px] bg-danger-soft px-4 py-3 text-[15px] font-medium text-danger"
           >
             {formError}
           </p>
@@ -160,15 +153,13 @@ export function LoginPage() {
         </Button>
       </form>
       {DEMO_MODE && (
-        <div className="mt-8 rounded-2xl border border-dashed border-line-strong p-4">
-          <p className="text-xs font-semibold tracking-wider text-subtle uppercase">
-            Demo accounts (created by seed_demo)
-          </p>
+        <div className="mt-8 rounded-[18px] border border-line p-5">
+          <p className="text-[13px] font-medium text-muted">Demo accounts, created by seed_demo</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {DEMO_ACCOUNTS.map((account) => (
               <Button
                 key={account.email}
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   setValue("email", account.email, { shouldValidate: true });
@@ -234,11 +225,11 @@ export function RegisterPage() {
 
   return (
     <AuthShell
-      title="Create your account"
+      title="Create your account."
       subtitle={
         <>
           Already have one?{" "}
-          <Link to="/login" className="font-semibold text-brand hover:underline">
+          <Link to="/login" className="link">
             Sign in
           </Link>
         </>
@@ -248,7 +239,7 @@ export function RegisterPage() {
         {formError && (
           <p
             role="alert"
-            className="rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger"
+            className="flex items-start gap-2 rounded-[14px] bg-danger-soft px-4 py-3 text-[15px] font-medium text-danger"
           >
             {formError}
           </p>

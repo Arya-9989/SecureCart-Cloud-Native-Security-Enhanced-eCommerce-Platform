@@ -50,6 +50,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [resolved]);
 
   const setPreference = useCallback((value: ThemePreference) => {
+    // A deliberate switch cross-fades colours (320ms, colour properties only); the class is
+    // removed afterwards so ordinary interactions never pay for it.
+    const root = document.documentElement;
+    root.classList.add("theme-transition");
+    window.setTimeout(() => {
+      root.classList.remove("theme-transition");
+    }, 400);
     setPreferenceState(value);
     try {
       if (value === "system") localStorage.removeItem(STORAGE_KEY);

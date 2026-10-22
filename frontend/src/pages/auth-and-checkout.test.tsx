@@ -170,7 +170,7 @@ describe("Checkout", () => {
       payment_token: "tok_mock_approve",
       shipping_address: { name: "Maya Patel", city: "Austin", country: "US" },
     });
-    expect(await screen.findByText("Thank you! Your order is confirmed.")).toBeInTheDocument();
+    expect(await screen.findByText("Thank you. Your order is confirmed.")).toBeInTheDocument();
   });
 
   it("explains a decline and uses a fresh key for the next attempt", async () => {
@@ -188,7 +188,7 @@ describe("Checkout", () => {
     await fillAddress(user);
     await user.click(screen.getByRole("button", { name: /Place order/ }));
     expect(await screen.findByText("Card declined (mock).")).toBeInTheDocument();
-    expect(screen.getByText("Nothing was charged and your cart is unchanged.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing was charged and your bag is unchanged.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Place order/ }));
     await waitFor(() => {
       expect(keys).toHaveLength(2);

@@ -1,216 +1,300 @@
-import {
-  ArrowRight,
-  Briefcase,
-  Headphones,
-  Lamp,
-  Lock,
-  Mountain,
-  RefreshCcw,
-  ShieldCheck,
-  Truck,
-  Watch,
-  type LucideIcon,
-} from "lucide-react";
+import { clsx } from "clsx";
+import { ChevronRight, RefreshCcw, Smartphone, Truck } from "lucide-react";
+import { useEffect } from "react";
 import { Link } from "react-router";
 
-import { ProductGrid } from "@/components/store/ProductCard";
+import { Shelf, ShelfItem } from "@/components/store/Shelf";
+import { buttonClasses } from "@/components/ui/buttonClasses";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, Skeleton } from "@/components/ui/misc";
-import { buttonClasses } from "@/components/ui/buttonClasses";
+import { Reveal } from "@/components/ui/Reveal";
 import { useCategories, useProducts } from "@/hooks/queries";
 import { formatMoney } from "@/lib/format";
+import { PROTECTIONS } from "@/lib/protection";
+import type { Category, Product } from "@/lib/types";
 
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  audio: Headphones,
-  wearables: Watch,
-  "home-living": Lamp,
-  workspace: Briefcase,
-  "travel-outdoor": Mountain,
-};
+// One request feeds the whole page: the catalog is small (the API caps a page at 100).
+const CATALOG_QUERY = { page_size: 100 };
 
-const PROMISES = [
-  { icon: Truck, title: "Free shipping over $75", text: "Flat $6.99 below that." },
-  { icon: ShieldCheck, title: "Protected accounts", text: "Argon2 hashing and rotating sessions." },
-  { icon: Lock, title: "Oversell-proof checkout", text: "Stock is reserved atomically." },
-  { icon: RefreshCcw, title: "Cancel before it ships", text: "Instant restock and refund." },
-];
-
-function Hero() {
-  const { data, isLoading } = useProducts({ featured: true, page_size: 3 });
-  const featured = data?.results ?? [];
+function Hero({ featured, loading }: { featured: Product[]; loading: boolean }) {
+  const trio = featured.slice(0, 3);
+  // Centre the hero product: [second, first, third].
+  const ordered = trio.length === 3 ? [trio[1], trio[0], trio[2]] : trio;
   return (
-    <section className="relative overflow-hidden border-b border-line bg-surface">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-70 dark:opacity-40"
-        style={{
-          background:
-            "radial-gradient(60rem 30rem at 85% -10%, color-mix(in oklab, var(--brand) 22%, transparent), transparent 60%), radial-gradient(40rem 24rem at -10% 110%, color-mix(in oklab, #14b8a6 16%, transparent), transparent 60%)",
-        }}
-        aria-hidden
-      />
-      <div className="container-page relative grid items-center gap-12 py-14 md:py-20 lg:grid-cols-[1.05fr_1fr]">
-        <div className="animate-slide-up">
-          <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-semibold text-muted shadow-xs backdrop-blur">
-            <span className="size-1.5 rounded-full bg-success" aria-hidden />
-            New season essentials are in
-          </p>
-          <h1 className="mt-5 text-4xl leading-[1.08] font-extrabold tracking-tight text-fg sm:text-5xl lg:text-[3.5rem]">
-            Thoughtful gear,
-            <br />
-            <span className="bg-gradient-to-r from-brand to-teal-500 bg-clip-text text-transparent">
-              secured end to end.
-            </span>
-          </h1>
-          <p className="mt-5 max-w-lg text-lg leading-relaxed text-muted">
-            Headphones, workspace tools and home comforts, sold through a storefront that treats
-            your account and your order like they matter.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/shop" className={buttonClasses("primary", "lg")}>
-              Shop the collection <ArrowRight className="size-4" aria-hidden />
-            </Link>
-            <Link to="/shop?featured=true" className={buttonClasses("outline", "lg")}>
-              View featured
-            </Link>
-          </div>
+    <section className="overflow-hidden bg-surface-2" aria-labelledby="hero-heading">
+      <div className="container-text pt-14 text-center sm:pt-20">
+        <p className="type-eyebrow text-muted">SecureCart Store</p>
+        <h1 id="hero-heading" className="type-hero mt-2">
+          Good things,
+          <br />
+          bought safely.
+        </h1>
+        <p className="type-lead mx-auto mt-4 max-w-[640px] text-muted">
+          Audio, workspace and home essentials, with your session, stock and payment handled
+          correctly.
+        </p>
+        <div className="relative z-20 mt-7 flex flex-wrap justify-center gap-3">
+          <Link to="/shop" className={buttonClasses("primary", "md")}>
+            Shop now
+          </Link>
+          <Link to="/protection" className={buttonClasses("secondary", "md")}>
+            How your order is protected
+          </Link>
         </div>
-        <div className="grid grid-cols-2 gap-4" aria-label="Featured products">
-          {isLoading
-            ? Array.from({ length: 3 }, (_, i) => (
-                <Skeleton
-                  key={i}
-                  className={
-                    i === 0 ? "row-span-2 aspect-[3/4] rounded-3xl" : "aspect-square rounded-3xl"
-                  }
-                />
-              ))
-            : featured.map((product, index) => (
+      </div>
+      <div className="mx-auto mt-12 grid max-w-[1240px] grid-cols-3 items-end px-1 sm:mt-16 sm:px-6">
+        {loading
+          ? Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className="aspect-[4/3]" aria-hidden />
+            ))
+          : ordered.map((product, index) =>
+              product ? (
                 <Link
                   key={product.id}
                   to={`/products/${product.slug}`}
-                  className={`group relative overflow-hidden rounded-3xl border border-line bg-surface-2 shadow-lift ${
-                    index === 0 ? "row-span-2" : ""
-                  }`}
+                  className={clsx(
+                    "group block origin-bottom rounded-[28px] text-center",
+                    index === 1 ? "z-10 scale-[1.3] sm:scale-[1.38]" : "scale-[1.08]",
+                  )}
                 >
                   <ProductImage
                     src={product.image_url}
                     alt={product.name}
-                    className={`size-full transition duration-500 group-hover:scale-105 ${
-                      index === 0 ? "aspect-[3/4]" : "aspect-square"
-                    }`}
+                    eager
+                    className="aspect-[4/3] w-full transition-transform duration-500 ease-(--ease-apple) group-hover:-translate-y-1"
                   />
-                  <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-2 rounded-xl bg-surface/90 px-3 py-2 shadow-sm backdrop-blur sm:inset-x-3 sm:bottom-3 sm:rounded-2xl sm:px-3.5 sm:py-2.5">
-                    <span className="truncate text-xs font-semibold text-fg sm:text-sm">
-                      {product.name}
-                    </span>
-                    <span className="hidden text-sm font-bold text-brand sm:inline">
-                      {formatMoney(product.price)}
-                    </span>
-                  </div>
+                  <span className="sr-only">
+                    {product.name}, {formatMoney(product.price)}
+                  </span>
                 </Link>
-              ))}
-        </div>
+              ) : null,
+            )}
       </div>
+      <div className="h-12 sm:h-20" aria-hidden />
     </section>
   );
 }
 
-function Categories() {
-  const { data, isLoading } = useCategories();
+function ProtectionBand() {
   return (
-    <section className="container-page mt-16" aria-labelledby="categories-heading">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h2 id="categories-heading" className="text-2xl font-bold text-fg">
-            Shop by category
+    <section
+      className="bg-black text-[#f5f5f7] dark:bg-[#0b0b0c]"
+      aria-labelledby="protection-heading"
+    >
+      <div className="container-page py-20 sm:py-28">
+        <Reveal className="mx-auto max-w-[760px] text-center">
+          <p className="type-eyebrow text-[#a1a1a6]">Protection, built in</p>
+          <h2 id="protection-heading" className="type-headline mt-2">
+            Every order, protected.
           </h2>
-          <p className="mt-1 text-sm text-muted">Five collections, curated for everyday use.</p>
-        </div>
-        <Link
-          to="/shop"
-          className="hidden text-sm font-semibold text-brand hover:underline sm:block"
-        >
-          View all products
-        </Link>
-      </div>
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {isLoading
-          ? Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
-          : data?.map((category) => {
-              const Icon = CATEGORY_ICONS[category.slug] ?? ShieldCheck;
-              return (
+          <p className="type-body-lg mx-auto mt-4 max-w-[600px] text-[#a1a1a6]">
+            Not a badge on the checkout page. Real mechanisms in the code that runs this store, from
+            the moment you sign in to the day your order arrives.
+          </p>
+        </Reveal>
+        <ol className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {PROTECTIONS.map((p, index) => {
+            const Icon = p.icon;
+            return (
+              <Reveal as="li" key={p.id} delay={index * 0.05} className="flex">
                 <Link
-                  key={category.id}
-                  to={`/shop?category=${category.slug}`}
-                  className="group card flex flex-col justify-between p-5 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-lift"
+                  to={`/protection#${p.id}`}
+                  className="group flex w-full flex-col rounded-[24px] bg-[#1d1d1f] p-7 transition-colors hover:bg-[#232326] focus-visible:outline-[#4c9bff]"
                 >
-                  <span className="flex size-11 items-center justify-center rounded-xl bg-brand-soft text-brand transition group-hover:bg-brand group-hover:text-brand-fg">
-                    <Icon className="size-5" aria-hidden />
-                  </span>
-                  <span className="mt-5">
-                    <span className="block font-semibold text-fg">{category.name}</span>
-                    <span className="text-xs text-muted">
-                      {category.product_count} product{category.product_count === 1 ? "" : "s"}
-                    </span>
+                  <Icon className="size-7 text-[#4c9bff]" strokeWidth={1.5} aria-hidden />
+                  <p className="mt-6 text-[13px] font-medium text-[#a1a1a6]">{p.stage}</p>
+                  <h3 className="mt-1 text-[21px] leading-tight font-semibold tracking-[-0.02em]">
+                    {p.title}
+                  </h3>
+                  <p className="mt-3 text-[15px] leading-relaxed text-[#a1a1a6]">{p.summary}</p>
+                  <span className="mt-auto inline-flex items-center gap-0.5 pt-6 text-[15px] text-[#4c9bff] group-hover:underline">
+                    How it works <ChevronRight className="size-4" aria-hidden />
                   </span>
                 </Link>
-              );
-            })}
+              </Reveal>
+            );
+          })}
+        </ol>
       </div>
     </section>
   );
 }
 
-function Featured() {
-  const { data, isLoading, error, refetch } = useProducts({
-    ordering: "-created_at",
-    page_size: 8,
-  });
+function CategoryTiles({ categories, products }: { categories: Category[]; products: Product[] }) {
   return (
-    <section className="container-page mt-16" aria-labelledby="new-heading">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h2 id="new-heading" className="text-2xl font-bold text-fg">
-            Fresh arrivals
-          </h2>
-          <p className="mt-1 text-sm text-muted">The latest additions to the catalog.</p>
-        </div>
-        <Link to="/shop" className="text-sm font-semibold text-brand hover:underline">
-          Shop all
-        </Link>
-      </div>
-      <div className="mt-6">
-        {error ? (
-          <ErrorState error={error} onRetry={() => void refetch()} />
-        ) : (
-          <ProductGrid products={data?.results} loading={isLoading} />
-        )}
+    <section className="py-20 sm:py-28" aria-labelledby="categories-heading">
+      <Reveal className="container-page">
+        <h2 id="categories-heading" className="type-section">
+          Shop by category.
+        </h2>
+      </Reveal>
+      <ul className="container-page mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        {categories.map((category, index) => {
+          const cover =
+            products.find((p) => p.category.slug === category.slug && p.is_featured) ??
+            products.find((p) => p.category.slug === category.slug);
+          return (
+            <Reveal
+              as="li"
+              key={category.id}
+              delay={(index % 3) * 0.05}
+              className={index < 3 ? "lg:col-span-2" : "lg:col-span-3"}
+            >
+              <Link
+                to={`/shop?category=${category.slug}`}
+                className="group studio flex h-full flex-col overflow-hidden rounded-[28px] p-7 pb-0"
+              >
+                <h3 className="type-tile text-[28px] sm:text-[32px]">{category.name}</h3>
+                <p className="mt-1 text-[15px] text-muted">
+                  {category.product_count} product{category.product_count === 1 ? "" : "s"}
+                </p>
+                <span className="mt-3 inline-flex items-center gap-0.5 text-[15px] text-brand group-hover:underline">
+                  Shop {category.name} <ChevronRight className="size-4" aria-hidden />
+                </span>
+                <div className="mx-auto mt-auto w-full max-w-[440px] overflow-hidden">
+                  {cover ? (
+                    <ProductImage
+                      src={cover.image_url}
+                      alt=""
+                      className="aspect-[4/3] w-full scale-[1.18] transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.22]"
+                    />
+                  ) : (
+                    <div className="aspect-[4/3]" />
+                  )}
+                </div>
+              </Link>
+            </Reveal>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function Latest({ products }: { products: Product[] }) {
+  const latest = [...products].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 8);
+  return (
+    <section className="bg-surface-2 pt-20 pb-12 sm:pt-28" aria-labelledby="latest-heading">
+      <Reveal className="container-page">
+        <h2 id="latest-heading" className="type-section">
+          The latest. <span className="text-muted">The newest additions to the store.</span>
+        </h2>
+      </Reveal>
+      <div className="mt-8">
+        <Shelf label="Latest products">
+          {latest.map((product) => (
+            <ShelfItem key={product.id} className="w-[78vw] max-w-[340px] sm:w-[340px]">
+              <Link
+                to={`/products/${product.slug}`}
+                className="group flex h-[440px] flex-col rounded-[24px] bg-surface p-7 shadow-card transition-shadow duration-300 hover:shadow-lift"
+              >
+                <p className="text-[13px] font-medium text-muted">{product.category.name}</p>
+                <h3 className="mt-1 text-[24px] leading-tight font-semibold tracking-[-0.02em]">
+                  {product.name}
+                </h3>
+                <p className="mt-2 text-[15px] text-fg tabular-nums">
+                  {formatMoney(product.price)}
+                  {product.stock > 0 && product.stock <= 5 && (
+                    <span className="ml-2 font-medium text-warning">Only {product.stock} left</span>
+                  )}
+                </p>
+                <div className="mt-auto">
+                  <ProductImage
+                    src={product.image_url}
+                    alt=""
+                    className="aspect-[4/3] w-full scale-[1.15] transition-transform duration-500 ease-(--ease-apple) group-hover:scale-[1.2]"
+                  />
+                </div>
+              </Link>
+            </ShelfItem>
+          ))}
+        </Shelf>
       </div>
     </section>
+  );
+}
+
+const PROMISES = [
+  {
+    icon: Truck,
+    title: "Free shipping over $75.",
+    text: "A flat $6.99 below that, shown in your bag before you check out.",
+  },
+  {
+    icon: RefreshCcw,
+    title: "Cancel until it ships.",
+    text: "Cancelling restocks the items and refunds the payment automatically.",
+  },
+  {
+    icon: Smartphone,
+    title: "Your bag goes where you go.",
+    text: "It is saved to your account, so it's there on any device you sign in on.",
+  },
+];
+
+function Promises() {
+  return (
+    <section className="py-20 sm:py-28" aria-labelledby="promises-heading">
+      <Reveal className="container-page">
+        <h2 id="promises-heading" className="type-section">
+          Shop with confidence.
+        </h2>
+      </Reveal>
+      <ul className="container-page mt-10 grid gap-3 md:grid-cols-3">
+        {PROMISES.map(({ icon: Icon, title, text }, index) => (
+          <Reveal as="li" key={title} delay={index * 0.05} className="tile p-8">
+            <Icon className="size-8 text-brand" strokeWidth={1.5} aria-hidden />
+            <h3 className="mt-6 text-[21px] leading-tight font-semibold tracking-[-0.02em]">
+              {title}
+            </h3>
+            <p className="mt-2 text-[17px] text-muted">{text}</p>
+          </Reveal>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <div className="container-page py-20" aria-hidden>
+      <Skeleton className="h-12 w-72" />
+      <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Skeleton key={i} className="h-[420px] rounded-[28px]" />
+        ))}
+      </div>
+    </div>
   );
 }
 
 export function HomePage() {
+  const { data, isLoading, error, refetch } = useProducts(CATALOG_QUERY);
+  const { data: categories } = useCategories();
+  const products = data?.results ?? [];
+  const featured = products.filter((p) => p.is_featured);
+
+  useEffect(() => {
+    document.title = "SecureCart: everyday essentials, bought safely";
+  }, []);
+
   return (
     <>
-      <Hero />
-      <section className="border-b border-line bg-surface-2/50" aria-label="Store promises">
-        <div className="container-page grid grid-cols-1 gap-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
-          {PROMISES.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface text-brand shadow-card ring-1 ring-line">
-                <Icon className="size-5" aria-hidden />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-fg">{title}</p>
-                <p className="text-sm text-muted">{text}</p>
-              </div>
-            </div>
-          ))}
+      <Hero featured={featured.length ? featured : products} loading={isLoading} />
+      <ProtectionBand />
+      {error ? (
+        <div className="container-page py-20">
+          <ErrorState error={error} onRetry={() => void refetch()} />
         </div>
-      </section>
-      <Categories />
-      <Featured />
+      ) : isLoading || !categories ? (
+        <HomeSkeleton />
+      ) : (
+        <>
+          <CategoryTiles categories={categories} products={products} />
+          <Latest products={products} />
+          <Promises />
+        </>
+      )}
     </>
   );
 }

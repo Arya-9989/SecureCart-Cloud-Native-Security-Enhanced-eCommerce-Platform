@@ -12,6 +12,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { OrderDetailPage } from "@/pages/OrderDetailPage";
 import { OrdersPage } from "@/pages/OrdersPage";
 import { ProductPage } from "@/pages/ProductPage";
+import { ProtectionPage } from "@/pages/ProtectionPage";
 import { ShopPage } from "@/pages/ShopPage";
 
 // The admin area (and its charting library) is code-split out of the storefront bundle.
@@ -56,6 +57,7 @@ export const routes: RouteObject[] = [
           { index: true, element: <HomePage /> },
           { path: "shop", element: <ShopPage /> },
           { path: "products/:slug", element: <ProductPage /> },
+          { path: "protection", element: <ProtectionPage /> },
           { path: "cart", element: authed(<CartPage />) },
           { path: "checkout", element: authed(<CheckoutPage />) },
           { path: "orders", element: authed(<OrdersPage />) },

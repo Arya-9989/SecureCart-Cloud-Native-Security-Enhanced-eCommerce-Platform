@@ -1,71 +1,109 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
+/* Inter Variable with the optical-size axis: text cut below ~20px, display cut above. */
+@import "@fontsource-variable/inter/opsz.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens. Components only ever use the semantic names below (bg-surface, text-muted,
- * border-line, bg-brand...), so light and dark themes are a matter of swapping variables.
+ * Metric-matched fallback so the swap to Inter doesn't shift layout (CLS budget is 0.05,
+ * we aim for 0). Overrides derived from Inter's vertical metrics, scaled onto Arial.
+ */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial"), local("Helvetica Neue"), local("Helvetica");
+  ascent-override: 90.2%;
+  descent-override: 22.48%;
+  line-gap-override: 0%;
+  size-adjust: 107.4%;
+}
+
+/*
+ * Design tokens. SecureCart is trust-first commerce in Apple Store calm: white and #f5f5f7,
+ * product first, one deep-blue accent used only for action and state. Every text/surface
+ * pair below is WCAG AA or better (secondary text is #6e6e73, not Apple's #86868b, which
+ * falls to 3.3:1 on #f5f5f7). Components only use the semantic names.
  */
 :root {
-  --bg: #f7f7fb;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f1f2f7;
-  --surface-3: #e7e8f0;
-  --line: #e3e4ec;
-  --line-strong: #cfd1dd;
-  --text: #0f1222;
-  --text-muted: #5b6075;
-  --text-subtle: #8a8fa3;
-  --brand: #4f46e5;
-  --brand-hover: #4338ca;
-  --brand-soft: #eef0ff;
+  --surface-2: #f5f5f7;
+  --surface-3: #e8e8ed;
+  --line: #e0e0e5;
+  --line-strong: #d2d2d7;
+  --text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --text-subtle: #6e6e73;
+  /* Accent as text, links and icons. */
+  --brand: #0b4fd1;
+  --brand-hover: #0a44b5;
+  --brand-soft: #eaf1fd;
+  /* Accent as a filled control (pill buttons). White on it is 6.9:1. */
+  --action: #0b4fd1;
+  --action-hover: #0a44b5;
   --brand-fg: #ffffff;
-  --success: #0f8a5f;
-  --success-soft: #e6f6ef;
-  --warning: #b45309;
-  --warning-soft: #fdf3e2;
+  --success: #1d7a3e;
+  --success-soft: #e8f5ec;
+  --warning: #a85b00;
+  --warning-soft: #fdf3e4;
   --danger: #c2283b;
   --danger-soft: #fdecee;
-  --info: #2563eb;
-  --info-soft: #e8f0fe;
-  --ring: #6366f1;
-  --shadow-color: 228 30% 25%;
-  /* Chart series (validated with the dataviz palette checker against --surface). */
-  --series-1: #2a78d6;
+  --info: #0b4fd1;
+  --info-soft: #eaf1fd;
+  --ring: #0b4fd1;
+  --nav: rgb(255 255 255 / 0.8);
+  --nav-solid: #ffffff;
+  --scrim: rgb(0 0 0 / 0.36);
+  --shadow-color: 240 4% 20%;
+  /* Studio sweep behind product art (art is transparent; the tile is the backdrop). */
+  --studio: radial-gradient(120% 95% at 50% 32%, #ffffff 0%, #f5f5f7 58%, #ececf0 100%);
+  /* Chart series, validated with the dataviz checker against the surfaces they sit on. */
+  --series-1: #0b4fd1;
+  --series-wash: rgb(11 79 209 / 0.1);
+  --grid: #e8e8ed;
   color-scheme: light;
 }
 
 .dark {
-  --bg: #0b0d17;
-  --surface: #12152a;
-  --surface-2: #181c35;
-  --surface-3: #222744;
-  --line: #262b49;
-  --line-strong: #353b5e;
-  --text: #eceefb;
-  --text-muted: #a3a8c3;
-  --text-subtle: #767c9b;
-  --brand: #818cf8;
-  --brand-hover: #a5b4fc;
-  --brand-soft: #1e2150;
-  --brand-fg: #0b0d17;
-  --success: #34d399;
-  --success-soft: #0f2a24;
-  --warning: #fbbf24;
-  --warning-soft: #2d2410;
-  --danger: #f87185;
-  --danger-soft: #34141c;
-  --info: #7cacf8;
-  --info-soft: #14213d;
-  --ring: #a5b4fc;
-  --shadow-color: 232 60% 2%;
-  --series-1: #3987e5;
+  --bg: #000000;
+  --surface: #161617;
+  --surface-2: #1d1d1f;
+  --surface-3: #2c2c2e;
+  --line: #2c2c2e;
+  --line-strong: #424245;
+  --text: #f5f5f7;
+  --text-muted: #a1a1a6;
+  --text-subtle: #a1a1a6;
+  --brand: #4c9bff;
+  --brand-hover: #7ab4ff;
+  --brand-soft: #0d2242;
+  --action: #0f62f0;
+  --action-hover: #2a74f5;
+  --brand-fg: #ffffff;
+  --success: #30d158;
+  --success-soft: #0e2a17;
+  --warning: #ffb340;
+  --warning-soft: #2e2210;
+  --danger: #ff6961;
+  --danger-soft: #3a1514;
+  --info: #4c9bff;
+  --info-soft: #0d2242;
+  --ring: #4c9bff;
+  --nav: rgb(22 22 23 / 0.8);
+  --nav-solid: #161617;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-color: 0 0% 0%;
+  --studio: radial-gradient(120% 95% at 50% 32%, #2c2c2f 0%, #1d1d1f 58%, #151516 100%);
+  --series-1: #3a8bf5;
+  --series-wash: rgb(58 139 245 / 0.12);
+  --grid: #2c2c2e;
   color-scheme: dark;
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans:
+    "Inter Variable", "Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -80,6 +118,8 @@
   --color-brand-hover: var(--brand-hover);
   --color-brand-soft: var(--brand-soft);
   --color-brand-fg: var(--brand-fg);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -90,17 +130,22 @@
   --color-info-soft: var(--info-soft);
   --color-ring: var(--ring);
   --color-series-1: var(--series-1);
+  --color-nav: var(--nav);
+  --color-nav-solid: var(--nav-solid);
 
   --shadow-card:
-    0 1px 2px hsl(var(--shadow-color) / 0.06), 0 2px 8px hsl(var(--shadow-color) / 0.05);
+    0 1px 2px hsl(var(--shadow-color) / 0.05), 0 2px 6px hsl(var(--shadow-color) / 0.04);
   --shadow-lift:
-    0 2px 4px hsl(var(--shadow-color) / 0.06), 0 12px 32px hsl(var(--shadow-color) / 0.12);
+    0 4px 12px hsl(var(--shadow-color) / 0.08), 0 16px 40px hsl(var(--shadow-color) / 0.1);
   --shadow-pop:
-    0 8px 24px hsl(var(--shadow-color) / 0.16), 0 24px 64px hsl(var(--shadow-color) / 0.18);
+    0 10px 30px hsl(var(--shadow-color) / 0.16), 0 30px 80px hsl(var(--shadow-color) / 0.18);
+
+  --ease-apple: cubic-bezier(0.4, 0, 0.6, 1);
+  --ease-out-soft: cubic-bezier(0.25, 0.1, 0.25, 1);
 
   --animate-shimmer: shimmer 1.6s linear infinite;
-  --animate-fade-in: fade-in 160ms ease-out;
-  --animate-slide-up: slide-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-fade-in: fade-in 240ms cubic-bezier(0.4, 0, 0.6, 1);
+  --animate-slide-up: slide-up 320ms cubic-bezier(0.4, 0, 0.6, 1);
 }
 
 @keyframes shimmer {
@@ -122,7 +167,7 @@
 @keyframes slide-up {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -135,38 +180,143 @@
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-optical-sizing: auto;
   }
   body {
     @apply bg-bg font-sans text-fg antialiased;
-    font-feature-settings: "cv11", "ss01";
+    font-feature-settings: "cv11";
+    letter-spacing: -0.011em;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
   ::selection {
-    background: color-mix(in oklab, var(--brand) 25%, transparent);
-  }
-  h1,
-  h2,
-  h3 {
-    letter-spacing: -0.02em;
+    background: color-mix(in oklab, var(--brand) 22%, transparent);
   }
   dialog::backdrop {
-    background: rgb(8 10 20 / 0.55);
-    backdrop-filter: blur(3px);
+    background: var(--scrim);
+    backdrop-filter: blur(4px);
+  }
+  /* Colour changes are the one thing that may take 320ms; never layout properties. */
+  html.theme-transition,
+  html.theme-transition * {
+    transition:
+      background-color 320ms var(--ease-apple),
+      color 320ms var(--ease-apple),
+      border-color 320ms var(--ease-apple) !important;
   }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
   }
 }
 
 @layer components {
+  /* ---- Type scale (measured from apple.com, mapped to Inter with optical sizing) ---- */
+  .type-hero {
+    font-size: clamp(2.5rem, 1.6rem + 4.2vw, 5rem);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  .type-headline {
+    font-size: clamp(2.125rem, 1.5rem + 2.8vw, 3.5rem);
+    line-height: 1.07;
+    font-weight: 600;
+    letter-spacing: -0.026em;
+  }
+  .type-section {
+    font-size: clamp(1.875rem, 1.3rem + 2.4vw, 3rem);
+    line-height: 1.08;
+    font-weight: 600;
+    letter-spacing: -0.024em;
+  }
+  .type-tile {
+    font-size: clamp(1.625rem, 1.25rem + 1.6vw, 2.5rem);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .type-lead {
+    font-size: clamp(1.1875rem, 1rem + 0.8vw, 1.75rem);
+    line-height: 1.18;
+    font-weight: 500;
+    letter-spacing: -0.012em;
+  }
+  .type-body-lg {
+    font-size: clamp(1.0625rem, 0.95rem + 0.4vw, 1.3125rem);
+    line-height: 1.38;
+    letter-spacing: -0.012em;
+  }
+  .type-eyebrow {
+    font-size: 0.9375rem;
+    line-height: 1.33;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+  }
+
+  .container-page {
+    @apply mx-auto w-full max-w-[1120px] px-4 sm:px-6;
+  }
+  .container-wide {
+    @apply mx-auto w-full max-w-[1440px] px-3 sm:px-3;
+  }
+  .container-text {
+    @apply mx-auto w-full max-w-[980px] px-4 sm:px-6;
+  }
+
+  /* Studio tile: the backdrop for the transparent product art. */
+  .studio {
+    background: var(--studio);
+  }
+
+  .card {
+    @apply rounded-[18px] border border-line bg-surface;
+  }
+  .tile {
+    @apply rounded-[28px] bg-surface-2;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-fg;
+  }
+  .field {
+    @apply block h-12 w-full rounded-xl border border-line-strong bg-surface px-4 text-[17px] text-fg transition-[border-color,box-shadow] duration-200 placeholder:text-muted focus:border-brand focus:ring-4 focus:ring-brand/15 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/15;
+  }
+  textarea.field {
+    @apply h-auto py-3;
+  }
+  .link {
+    @apply rounded-sm font-medium text-brand underline-offset-4 hover:underline;
+  }
+
+  /* Translucent bars: the only places blur is allowed. */
+  .glass {
+    background: var(--nav);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: var(--nav-solid);
+    }
+  }
+
   .skeleton {
     background: linear-gradient(
       90deg,
@@ -177,16 +327,31 @@
     background-size: 400% 100%;
     @apply animate-shimmer rounded-lg;
   }
-  .container-page {
-    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+      background: var(--surface-2);
+    }
   }
-  .card {
-    @apply rounded-2xl border border-line bg-surface shadow-card;
+
+  /* Expands a small control's hit area to at least 44x44 without changing its layout. */
+  .hit {
+    position: relative;
   }
-  .label {
-    @apply mb-1.5 block text-sm font-medium text-fg;
+  .hit::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
-  .field {
-    @apply block w-full rounded-xl border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-fg shadow-xs transition placeholder:text-subtle focus:border-brand focus:ring-4 focus:ring-brand/15 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/15;
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

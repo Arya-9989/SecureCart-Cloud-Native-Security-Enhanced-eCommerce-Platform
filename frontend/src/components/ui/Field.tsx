@@ -1,4 +1,5 @@
 import { clsx } from "clsx";
+import { AlertCircle } from "lucide-react";
 import {
   forwardRef,
   useId,
@@ -25,11 +26,15 @@ function FieldShell({ id, label, error, hint, children, className }: FieldShellP
       </label>
       {children}
       {error ? (
-        <p id={`${id}-error`} className="mt-1.5 text-xs font-medium text-danger">
+        <p
+          id={`${id}-error`}
+          className="mt-1.5 flex items-center gap-1.5 text-[13px] font-medium text-danger"
+        >
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
           {error}
         </p>
       ) : hint ? (
-        <p id={`${id}-hint`} className="mt-1.5 text-xs text-muted">
+        <p id={`${id}-hint`} className="mt-1.5 text-[13px] text-muted">
           {hint}
         </p>
       ) : null}

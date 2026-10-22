@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/api";
 
 import { Button } from "./Button";
 
+/** Designed empty state: quiet icon, one declarative headline, one action. */
 export function EmptyState({
   icon: Icon,
   title,
@@ -22,16 +23,16 @@ export function EmptyState({
   return (
     <div
       className={clsx(
-        "flex flex-col items-center justify-center rounded-2xl border border-dashed border-line-strong bg-surface px-6 py-14 text-center",
+        "tile flex flex-col items-center justify-center px-6 py-16 text-center sm:py-20",
         className,
       )}
     >
-      <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-        <Icon className="size-6" aria-hidden />
-      </div>
-      <h2 className="text-lg font-semibold text-fg">{title}</h2>
-      {description && <p className="mt-1.5 max-w-sm text-sm text-muted">{description}</p>}
-      {action && <div className="mt-6">{action}</div>}
+      <Icon className="size-10 text-muted" strokeWidth={1.5} aria-hidden />
+      <h2 className="mt-5 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg sm:text-[28px]">
+        {title}
+      </h2>
+      {description && <p className="mt-2 max-w-md text-[17px] text-muted">{description}</p>}
+      {action && <div className="mt-7">{action}</div>}
     </div>
   );
 }
@@ -48,15 +49,15 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="flex flex-col items-center justify-center rounded-2xl border border-danger/25 bg-danger-soft/60 px-6 py-12 text-center"
+      className="tile flex flex-col items-center justify-center px-6 py-16 text-center"
     >
-      <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-danger-soft text-danger">
-        <AlertTriangle className="size-6" aria-hidden />
-      </div>
-      <h2 className="text-lg font-semibold text-fg">{title}</h2>
-      <p className="mt-1.5 max-w-sm text-sm text-muted">{errorMessage(error)}</p>
+      <AlertTriangle className="size-10 text-danger" strokeWidth={1.5} aria-hidden />
+      <h2 className="mt-5 text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg">
+        {title}
+      </h2>
+      <p className="mt-2 max-w-md text-[17px] text-muted">{errorMessage(error)}</p>
       {onRetry && (
-        <Button variant="outline" className="mt-6" onClick={onRetry}>
+        <Button variant="secondary" className="mt-7" onClick={onRetry}>
           Try again
         </Button>
       )}

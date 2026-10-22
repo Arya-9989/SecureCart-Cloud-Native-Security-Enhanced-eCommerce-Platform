@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { Pagination } from "@/components/ui/misc";
 import { useCategories, useProducts } from "@/hooks/queries";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import type { ProductQuery } from "@/lib/endpoints";
 
 const PAGE_SIZE = 12;
@@ -83,32 +84,30 @@ function Filters({
           }}
           aria-pressed={active}
           className={clsx(
-            "flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition",
-            active
-              ? "bg-brand-soft font-semibold text-brand"
-              : "text-muted hover:bg-surface-2 hover:text-fg",
+            "flex w-full items-center justify-between rounded-lg py-1.5 text-[15px] transition-colors",
+            active ? "font-semibold text-fg" : "text-fg/75 hover:text-fg",
           )}
         >
           <span>{label}</span>
-          {count !== undefined && <span className="text-xs tabular-nums">{count}</span>}
+          {count !== undefined && (
+            <span className="text-[13px] text-muted tabular-nums">{count}</span>
+          )}
         </button>
       </li>
     );
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-8">
       <div>
-        <h2 className="mb-2 px-3 text-xs font-semibold tracking-wider text-subtle uppercase">
-          Category
-        </h2>
+        <h2 className="mb-2 text-[13px] font-semibold text-muted">Category</h2>
         <ul className="space-y-0.5">
           {categoryButton(null, "All products")}
           {categories?.map((c) => categoryButton(c.slug, c.name, c.product_count))}
         </ul>
       </div>
-      <form onSubmit={applyPrice} className="px-3">
-        <h2 className="mb-3 text-xs font-semibold tracking-wider text-subtle uppercase">Price</h2>
+      <form onSubmit={applyPrice}>
+        <h2 className="mb-3 text-[13px] font-semibold text-muted">Price</h2>
         <div className="flex items-center gap-2">
           <label className="sr-only" htmlFor="min-price">
             Minimum price
@@ -121,7 +120,7 @@ function Filters({
             onChange={(e) => {
               setMin(e.target.value.replace(/[^\d.]/g, ""));
             }}
-            className="field py-2"
+            className="field h-10 rounded-full px-4 text-[15px]"
           />
           <span className="text-subtle" aria-hidden>
             –
@@ -137,18 +136,16 @@ function Filters({
             onChange={(e) => {
               setMax(e.target.value.replace(/[^\d.]/g, ""));
             }}
-            className="field py-2"
+            className="field h-10 rounded-full px-4 text-[15px]"
           />
         </div>
-        <Button type="submit" variant="secondary" size="sm" className="mt-3 w-full">
+        <Button type="submit" variant="outline" size="sm" className="mt-3 w-full">
           Apply price
         </Button>
       </form>
-      <div className="px-3">
-        <h2 className="mb-3 text-xs font-semibold tracking-wider text-subtle uppercase">
-          Availability
-        </h2>
-        <label className="flex cursor-pointer items-center gap-3 text-sm text-fg">
+      <div>
+        <h2 className="mb-3 text-[13px] font-semibold text-muted">Availability</h2>
+        <label className="flex cursor-pointer items-center gap-3 text-[15px] text-fg">
           <input
             type="checkbox"
             checked={query.in_stock === true}
@@ -160,7 +157,7 @@ function Filters({
           />
           In stock only
         </label>
-        <label className="mt-3 flex cursor-pointer items-center gap-3 text-sm text-fg">
+        <label className="mt-3 flex cursor-pointer items-center gap-3 text-[15px] text-fg">
           <input
             type="checkbox"
             checked={query.featured === true}
@@ -188,6 +185,8 @@ export function ShopPage() {
     ? `Results for "${query.search}"`
     : (categoryName ?? (query.featured ? "Featured products" : "All products"));
 
+  useDocumentTitle(heading);
+
   const activeChips = [
     query.search && { key: "search", label: `"${query.search}"` },
     categoryName && { key: "category", label: categoryName },
@@ -205,11 +204,11 @@ export function ShopPage() {
   };
 
   return (
-    <div className="container-page py-10">
-      <div className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div className="container-page pt-12 pb-24 sm:pt-16">
+      <div className="flex flex-col gap-5 pb-8 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-fg">{heading}</h1>
-          <p className="mt-1 text-sm text-muted" aria-live="polite">
+          <h1 className="type-headline">{heading}</h1>
+          <p className="mt-2 text-[17px] text-muted" aria-live="polite">
             {data ? `${data.count} product${data.count === 1 ? "" : "s"}` : "Loading products"}
           </p>
         </div>
@@ -235,7 +234,7 @@ export function ShopPage() {
             onChange={(e) => {
               update({ ordering: e.target.value || null });
             }}
-            className="field h-10 w-auto py-0 pr-8"
+            className="field h-11 w-auto rounded-full py-0 pr-9 pl-4 text-[15px]"
           >
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>
@@ -255,7 +254,7 @@ export function ShopPage() {
               onClick={() => {
                 clearChip(chip.key);
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-fg transition hover:border-danger/40 hover:text-danger"
+              className="hit inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-1.5 text-[13px] font-medium text-fg transition-colors hover:bg-surface-3"
               aria-label={`Remove filter ${chip.label}`}
             >
               {chip.label}
@@ -264,7 +263,7 @@ export function ShopPage() {
           ))}
           <button
             type="button"
-            className="text-xs font-semibold text-brand hover:underline"
+            className="hit text-[13px] font-medium text-brand hover:underline"
             onClick={() => {
               update({
                 search: null,
@@ -282,7 +281,7 @@ export function ShopPage() {
       )}
 
       {showFilters && (
-        <div id="mobile-filters" className="card mt-4 animate-fade-in p-4 lg:hidden">
+        <div id="mobile-filters" className="tile mt-4 animate-fade-in p-6 lg:hidden">
           <Filters
             query={query}
             update={update}
@@ -293,9 +292,9 @@ export function ShopPage() {
         </div>
       )}
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[220px_1fr]">
+      <div className="mt-6 grid gap-10 lg:grid-cols-[200px_1fr]">
         <aside className="hidden lg:block" aria-label="Product filters">
-          <div className="sticky top-24">
+          <div className="sticky top-20">
             <Filters query={query} update={update} />
           </div>
         </aside>
@@ -338,7 +337,7 @@ export function ShopPage() {
                   count={data.count}
                   onPage={(page) => {
                     update({ page: String(page) });
-                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    window.scrollTo({ top: 0 });
                   }}
                 />
               )}
