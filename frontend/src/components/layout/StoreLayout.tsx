@@ -91,7 +91,7 @@ function Footer() {
           </FooterColumn>
         </div>
         <p className="border-t border-line-strong/60 pt-4">
-          Copyright © {new Date().getFullYear()} SecureCart. A portfolio project by Arya Shrikant
+          Copyright © {new Date().getFullYear()} SecureCart. A portfolio project by Arya
           Mahindrakar.
         </p>
       </div>

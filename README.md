@@ -289,8 +289,8 @@ The key concurrency guarantee has its own test: **eight threads race to buy thre
 
 ## License
 
-[MIT](LICENSE) © Arya Shrikant Mahindrakar
+[MIT](LICENSE) © Arya Mahindrakar
 
 ---
 
-Built by **Arya Shrikant Mahindrakar**, B.Tech Cloud Technology & Information Security.
+Built by **Arya Mahindrakar**, B.Tech Cloud Technology & Information Security.

@@ -202,3 +202,11 @@ describe("Session restore", () => {
     server.events.removeAllListeners("request:start");
   });
 });
+
+describe("Footer", () => {
+  it("credits the project's author by the name they use", async () => {
+    renderApp("/shop");
+    const footer = await screen.findByRole("contentinfo");
+    expect(footer).toHaveTextContent(/A portfolio project by Arya Mahindrakar\./);
+  });
+});
