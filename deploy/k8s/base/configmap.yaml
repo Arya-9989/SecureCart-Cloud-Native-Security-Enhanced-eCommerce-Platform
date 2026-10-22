@@ -1,0 +1,32 @@
+# Non-secret settings (see the README's configuration table). Secrets come from the
+# "securecart-secrets" Secret: DJANGO_SECRET_KEY, DATABASE_URL, REDIS_URL,
+# MEDIA_S3_ACCESS_KEY, MEDIA_S3_SECRET_KEY, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
+# STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (the last four may be empty).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: securecart-config
+data:
+  DJANGO_DEBUG: "false"
+  # "backend" is the Host header the kubelet probes send (see backend.yaml).
+  DJANGO_ALLOWED_HOSTS: "securecart.example.com,backend"
+  DJANGO_CSRF_TRUSTED_ORIGINS: "https://securecart.example.com"
+  APP_BASE_URL: "https://securecart.example.com"
+  DJANGO_CACHE_BACKEND: "redis"
+  # Client IPs: the ingress controller and the frontend's nginx each append one hop.
+  NUM_PROXIES: "2"
+  # TLS ends at the ingress, which redirects to HTTPS. Django sends HSTS on API responses;
+  # the production overlay adds it at the ingress for every response.
+  DJANGO_BEHIND_TLS_PROXY: "true"
+  DJANGO_SECURE_SSL_REDIRECT: "false"
+  DJANGO_HSTS_SECONDS: "31536000"
+  REFRESH_COOKIE_SECURE: "true"
+  # Migrations run in the migrate Job, never in the serving pods.
+  RUN_MIGRATIONS: "false"
+  SEED_DEMO: "false"
+  MEDIA_STORAGE: "s3"
+  MEDIA_S3_BUCKET: "securecart-media"
+  EMAIL_BACKEND: "smtp"
+  EMAIL_PORT: "587"
+  PAYMENT_PROVIDER: "apps.payments.providers.mock.MockPaymentProvider"
+  LOG_LEVEL: "INFO"

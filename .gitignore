@@ -36,3 +36,5 @@ Thumbs.db
 # Scan output
 trivy-reports/
 .trivy-cache/
+deploy/k8s/overlays/kind/secrets.env
+deploy/k8s/overlays/kind/local-ca.crt

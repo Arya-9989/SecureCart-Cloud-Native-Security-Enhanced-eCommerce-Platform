@@ -70,7 +70,10 @@ jobs:
       - name: Start MinIO (object storage for image-upload tests)
         # Service containers cannot pass the "server /data" arguments, so it runs here.
         run: |
-          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin             cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880             server /data --address :9000
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880 \
+            server /data --address :9000
           for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live && exit 0
             sleep 1
@@ -179,7 +182,10 @@ jobs:
       - name: Start MinIO (product images)
         # Service containers cannot pass the "server /data" arguments, so it runs here.
         run: |
-          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin             cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880             server /data --address :9000
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880 \
+            server /data --address :9000
           for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live && exit 0
             sleep 1
@@ -292,6 +298,57 @@ jobs:
           path: trivy-reports/
           retention-days: 14
 
+  k8s-manifests:
+    name: Kubernetes manifests (kustomize, kubeconform, Trivy config)
+    runs-on: ubuntu-24.04
+    env:
+      KUSTOMIZE_VERSION: "5.8.3"
+      KUSTOMIZE_SHA256: cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61
+      KUBECONFORM_VERSION: "0.8.0"
+      KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      TRIVY_VERSION: "0.76.1"
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      # CRD schemas for cert-manager's ClusterIssuer, pinned to a commit of the catalog.
+      CRDS_CATALOG: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install kustomize, kubeconform and Trivy (checksum-verified releases)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLo kustomize.tgz "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          echo "${KUSTOMIZE_SHA256}  kustomize.tgz" | sha256sum --check --strict
+          curl -fsSLo kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tgz" | sha256sum --check --strict
+          curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum --check --strict
+          tar -xzf kustomize.tgz kustomize
+          tar -xzf kubeconform.tgz kubeconform
+          tar -xzf trivy.tgz trivy
+          sudo install -m 0755 kustomize kubeconform trivy /usr/local/bin/
+      - name: Render every overlay
+        run: |
+          set -euo pipefail
+          mkdir -p rendered
+          # The kind overlay reads a generated secrets file; placeholders are enough to render.
+          printf '%s\n' DJANGO_SECRET_KEY=ci POSTGRES_PASSWORD=ci REDIS_PASSWORD=ci \
+            MEDIA_S3_ACCESS_KEY=ci MEDIA_S3_SECRET_KEY=ci > deploy/k8s/overlays/kind/secrets.env
+          for overlay in kind production; do
+            kustomize build "deploy/k8s/overlays/$overlay" > "rendered/$overlay.yaml"
+          done
+      - name: kubeconform (strict, Kubernetes 1.37)
+        run: |
+          for overlay in kind production; do
+            kubeconform -strict -summary -kubernetes-version 1.37.0 \
+              -schema-location default \
+              -schema-location "${CRDS_CATALOG}/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+              "rendered/$overlay.yaml"
+          done
+      - name: Trivy misconfiguration scan (fail on HIGH/CRITICAL)
+        run: trivy config --exit-code 1 --severity HIGH,CRITICAL rendered/
+
   docker:
     name: Docker images + compose smoke test
     runs-on: ubuntu-24.04
@@ -327,7 +384,8 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/admin/dashboard/)" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/products/halo-table-lamp)" = "200"
           # Account email leaves the API over SMTP and lands in Mailpit.
-          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json'             -d '{"email":"maya@example.com"}' http://localhost:8080/api/auth/password/forgot/)" = "202"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"email":"maya@example.com"}' http://localhost:8080/api/auth/password/forgot/)" = "202"
           for _ in $(seq 1 20); do
             curl -fsS http://127.0.0.1:8025/api/v1/messages | grep -q "Reset your SecureCart password" && exit 0
             sleep 1

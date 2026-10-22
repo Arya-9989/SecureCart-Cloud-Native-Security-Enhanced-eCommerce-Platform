@@ -194,6 +194,16 @@ docker compose up -d --build backend
 
 Checkout then offers Stripe's test methods (`pm_card_visa` approves, `pm_card_chargeDeclined` declines). An approved order answers `202` and shows "Confirming your payment" until `payment_intent.succeeded` arrives through `stripe listen`. `stripe trigger payment_intent.succeeded` exercises the endpoint, but its event names no SecureCart order, so it is acknowledged and ignored. CI never needs keys: it runs against `stripe/stripe-mock` and webhook fixtures signed with Stripe's algorithm.
 
+### Kubernetes (kind, with TLS)
+
+`deploy/k8s` holds a Kustomize base (the application) and two overlays: `kind` (in-cluster PostgreSQL, Redis, MinIO and Mailpit, a self-signed certificate, demo data) and `production` (managed data services, cert-manager with Let's Encrypt, registry images). Every pod runs non-root with a read-only root filesystem, no capabilities, `RuntimeDefault` seccomp and no service-account token, under the namespace's enforced `restricted` Pod Security Standard. NetworkPolicies deny everything except the paths the app uses. The API has startup, readiness and liveness probes, and both web tiers have PodDisruptionBudgets ([ADR 0007](docs/adr/0007-kubernetes-manifests-and-tls.md)).
+
+```bash
+deploy/k8s/scripts/kind-up.sh     # cluster, Traefik, images, secrets, TLS, apply, smoke test
+# https://securecart.localtest.me:5403 (the script prints the certificate to trust)
+deploy/k8s/scripts/kind-down.sh   # delete the cluster
+```
+
 ### Local development
 
 Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), and Node 22+.
@@ -299,7 +309,7 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 
 **Measured** (2026-10-23, the Docker stack behind nginx, every audited route in light and dark at 1440px and 390px): no axe violations reported, CLS at most 0.0072, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 89 to 94 on the public routes and 90 to 93 on the signed-in ones; it moves by a point or two between runs on the same build (three repeat runs of a product page gave 90, 91 and 90). With JavaScript off, the measured public pages (home, shop, a category, `/protection` and a product page) show 100% of the words they show with it on; scrolling those pages drops no frames (0% of frames over 20 ms), and with reduced motion no text is left hidden. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 101 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
 
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; Trivy and hadolint on every image and Dockerfile; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; Trivy and hadolint on every image and Dockerfile; renders both Kubernetes overlays and validates them with `kubeconform -strict` and `trivy config`; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
 
 ## Project structure
 
@@ -350,10 +360,6 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 - **Django 5.2 LTS and ESLint 9.** Both are deliberate: 5.2 is the long-term-support line, and ESLint 9 is the newest major that `eslint-plugin-jsx-a11y` supports, so accessibility linting stays on.
 - **Prerendering from a recorded snapshot, not SSR.** The public pages only need the public catalog, so rendering them once per build keeps nginx static (no Node server in production) and lets the Docker image and CI build without a backend. The cost is that the HTML can lag the live catalog until the next build; the app refetches on load, and a product that has not been confirmed live yet is looked up before it goes into a bag. New products still work at once through the SPA shell.
 - **Migrations at container start.** Convenient for a single instance. With several replicas, set `RUN_MIGRATIONS=false` and run them as a release job.
-
-## Roadmap (future work, not implemented)
-
-- Deployment manifests (Kubernetes or a managed container service) with TLS termination.
 
 ## License
 

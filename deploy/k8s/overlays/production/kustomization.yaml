@@ -1,0 +1,64 @@
+# Production shape: managed PostgreSQL, Redis, S3 and SMTP outside the cluster, a
+# Let's Encrypt certificate from cert-manager, and images from the registry.
+#
+# Before applying:
+#   1. Replace shop.example.com (here and in cluster-issuer.yaml's email) with your host.
+#   2. Create the "securecart-secrets" Secret out of band (External Secrets, Sealed Secrets
+#      or `kubectl create secret generic`) with the keys listed in base/configmap.yaml.
+#   3. Set the image tags/digests below to the release being deployed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: securecart
+resources:
+  - ../../base
+  - cluster-issuer.yaml
+  - egress-external.yaml
+  - hsts-middleware.yaml
+images:
+  - name: securecart-backend
+    newName: ghcr.io/arya-9989/securecart-backend
+    newTag: "1.0.0"
+  - name: securecart-frontend
+    newName: ghcr.io/arya-9989/securecart-frontend
+    newTag: "1.0.0"
+patches:
+  - target:
+      kind: Ingress
+      name: securecart
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          # cert-manager's ingress-shim issues and renews securecart-tls automatically.
+          cert-manager.io/cluster-issuer: letsencrypt-production
+          # HSTS on every response, set at the edge (see hsts-middleware.yaml).
+          traefik.ingress.kubernetes.io/router.middlewares: securecart-hsts@kubernetescrd
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: shop.example.com
+      - op: replace
+        path: /spec/rules/0/host
+        value: shop.example.com
+  - target:
+      kind: ConfigMap
+      name: securecart-config
+    patch: |-
+      - op: replace
+        path: /data/DJANGO_ALLOWED_HOSTS
+        value: shop.example.com,backend
+      - op: replace
+        path: /data/DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://shop.example.com
+      - op: replace
+        path: /data/APP_BASE_URL
+        value: https://shop.example.com
+      - op: add
+        path: /data/EMAIL_HOST
+        value: smtp.example.com
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3

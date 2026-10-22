@@ -1,0 +1,26 @@
+# TLS terminates here. The certificate lives in the "securecart-tls" Secret: issued by
+# cert-manager in production (the annotation is added by that overlay), or a self-signed one
+# made by deploy/k8s/scripts/kind-up.sh for the local kind cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: securecart
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - securecart.example.com
+      secretName: securecart-tls
+  rules:
+    - host: securecart.example.com
+      http:
+        paths:
+          # One origin: the frontend's nginx serves the SPA and proxies /api to the backend,
+          # exactly as in docker compose, so the refresh cookie stays SameSite=Strict.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http

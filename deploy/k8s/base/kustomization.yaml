@@ -1,0 +1,26 @@
+# SecureCart application components. Data services (PostgreSQL, Redis, object storage, SMTP)
+# are not here: the kind overlay runs them in-cluster, production points at managed ones.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: securecart
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: securecart
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - backend.yaml
+  - frontend.yaml
+  - scheduler.yaml
+  - migrate-job.yaml
+  - ingress.yaml
+  - networkpolicies.yaml
+images:
+  - name: securecart-backend
+    newName: securecart-backend
+    newTag: local
+  - name: securecart-frontend
+    newName: securecart-frontend
+    newTag: local
