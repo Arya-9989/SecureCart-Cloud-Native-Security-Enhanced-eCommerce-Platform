@@ -51,7 +51,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
 - A "How your order is protected" page (`/protection`) and quiet trust cues at sign-in, bag, checkout and order confirmation. Every statement describes a mechanism in this codebase and links to it; the copy lives in one file (`frontend/src/lib/protection.ts`).
 
-**Design**: Apple Store calm on white and `#f5f5f7` with one deep-blue accent, Inter with optical sizing, designed light and dark themes, WCAG AA contrast throughout, reduced-motion support and 44×44 touch targets. Product images are original SVG illustrations lit as one studio set.
+**Design**: Apple Store calm on white and `#f5f5f7` with one deep-blue accent, Inter with optical sizing, designed light and dark themes, WCAG AA contrast throughout, reduced-motion support, and touch targets of at least 24px everywhere (WCAG 2.5.8) with 44px header controls and footer rows on phones. Product images are original SVG illustrations lit as one studio set, with one camera rule: standing products at eye level, desk objects from about 30° above.
 
 **Admin console** (`/admin`, admin role only)
 - Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts, plus a Ctrl/⌘K command palette.
@@ -111,16 +111,18 @@ Row locks are held only for the reservation transaction, never across the paymen
 |---|---|
 | **Passwords** | Argon2 hashing (PBKDF2 kept only to verify legacy hashes) and Django's validators: minimum length 10, common-password and all-numeric checks, similarity to email/name. |
 | **Session tokens** | Short-lived JWT access token (10 min) kept **in memory** by the SPA, never in `localStorage`. The refresh token (7 days) lives in an `httpOnly; Secure; SameSite=Strict` cookie scoped to `Path=/api/auth/`. |
-| **Refresh rotation and theft detection** | Every refresh rotates the token and blacklists the old one. Replaying an already-rotated token is treated as theft: **all** of that user's refresh tokens are revoked and the event is audited. |
+| **Refresh rotation and theft detection** | Every refresh rotates the token and blacklists the old one. Replaying an already-rotated token is treated as theft: **all** of that user's refresh tokens are revoked and the event is audited. Rotation locks the token's row, so requests racing with the same token cannot both succeed: one rotates, the others count as replays (a PostgreSQL test races six of them). |
 | **CSRF** | The cookie-authenticated endpoints (refresh, logout) also require an `X-CSRF-Protection: 1` header, which cross-site forms cannot send and cross-origin scripts cannot send without a CORS preflight that is denied. Everything else uses bearer tokens. |
 | **Authorization (RBAC)** | An `IsAdminRole` permission guards every admin endpoint. The role is read from the database on each request, not from token claims, so demotion or suspension takes effect immediately. Admins cannot demote or suspend themselves, and role/status changes revoke the target user's sessions. |
 | **Object-level access** | Orders and cart items are always queried through the requesting user, so another user's order returns `404` (no ID enumeration). Order URLs use UUIDs. |
 | **Input validation** | DRF serializers on every write; database `CHECK` constraints (`price > 0`, `stock >= 0`, `quantity >= 1`); strict formats for SKUs, postal codes, country codes and image URLs (site-relative or `https://` only, so no `javascript:` or protocol-relative URLs). JSON-only parsers and a 1 MiB body limit. |
-| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change; 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; plus global anonymous/user limits. A database-backed cache keeps counters consistent across gunicorn workers. |
+| **Brute force and abuse** | DRF throttling: 10/min per IP for login, register and password change (keyed by IP even for signed-in callers, so a stolen access token cannot brute-force the current password); 60/min for silent refresh (a separate budget, so page loads never lock users out); 20/min per user for checkout; plus global anonymous/user limits. A database-backed cache keeps counters consistent across gunicorn workers. |
 | **User enumeration** | Unknown email, wrong password and inactive account all return the same message, and Django's auth backend equalises timing. |
 | **Headers** | nginx sends a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` and COOP. Django adds its own CSP for the API docs and `Cache-Control: no-store` on API responses. HSTS and SSL redirect are configurable for TLS deployments. |
+| **Error leakage** | Every API error, including unknown routes and unhandled exceptions, answers with the same JSON envelope and never includes exception details. |
+| **Private pages and crawlers** | The bag, checkout, orders, admin and not-found pages carry `<meta name="robots" content="noindex">`. `robots.txt` only disallows `/api/`, because a crawler blocked from a page never sees its `noindex`. |
 | **Open redirects** | The `?next=` parameter after sign-in only accepts same-site relative paths. |
-| **Payments** | No card data reaches the backend: the client sends an opaque provider token. Checkout requires an `Idempotency-Key` header, so retries never double-charge or double-reserve. |
+| **Payments** | No card data reaches the backend: the client sends an opaque provider token. Checkout requires an `Idempotency-Key` header, so retries never double-charge or double-reserve, even when they race the first attempt: reservations are serialised per shopper and the key is re-checked under that lock. A retry gets the first attempt's answer, including its `402` if the card was declined. |
 | **Audit trail** | Append-only `AuditLog` for admin create/update/delete, order transitions, role changes, logins, failed logins, password changes and refresh-token reuse, with actor, diff, client IP (proxy-aware) and request ID. |
 | **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`). |
 
@@ -130,7 +132,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 |---|---|
 | Backend | Python 3.12, Django 5.2 LTS, Django REST Framework, SimpleJWT (rotation + blacklist), django-filter, drf-spectacular (OpenAPI 3), argon2-cffi, gunicorn, WhiteNoise |
 | Database | PostgreSQL 17 (SQLite for quick local runs; the concurrency test needs PostgreSQL) |
-| Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, TanStack Query, React Hook Form + Zod, Recharts, Motion, Radix UI, sonner, vaul, cmdk, Lucide icons, self-hosted Inter Variable |
+| Frontend | React 19, TypeScript (strict), Vite, Tailwind CSS v4, React Router, TanStack Query, React Hook Form + Zod, Recharts, Radix UI, sonner, vaul, cmdk, Lucide icons, self-hosted Inter Variable |
 | Testing | pytest, pytest-django, coverage; Vitest, Testing Library, MSW; Playwright + axe-core |
 | Quality | Ruff (lint + format), mypy (strict, django-stubs), ESLint (typescript-eslint strict, jsx-a11y), Prettier |
 | Delivery | Multi-stage Dockerfiles, docker compose, nginx-unprivileged, GitHub Actions |
@@ -158,7 +160,7 @@ The sign-in page has one-click buttons for both (hide them with `VITE_DEMO_MODE=
 Requirements: Python 3.12 with [uv](https://docs.astral.sh/uv/), and Node 22+.
 
 ```bash
-# API on http://localhost:8000
+# Terminal 1, from the repo root: API on http://localhost:8000
 cd backend
 uv sync
 export DJANGO_DEBUG=true DATABASE_URL=sqlite:///db.sqlite3 REFRESH_COOKIE_SECURE=false
@@ -166,17 +168,20 @@ uv run python manage.py migrate
 uv run python manage.py seed_demo
 uv run python manage.py runserver
 
-# SPA on http://localhost:5173 (proxies /api to :8000, so cookies behave as in production)
+# Terminal 2, from the repo root: SPA on http://localhost:5173
+# (proxies /api to :8000, so cookies behave as in production)
 cd frontend
 npm install
 npm run dev
 ```
 
+Different ports: `uv run python manage.py runserver 127.0.0.1:8001` for the API, then `VITE_PORT=5180 VITE_DEV_API_PROXY=http://127.0.0.1:8001 npm run dev` for the SPA.
+
 Other commands: `uv run python manage.py expire_pending_orders --minutes 30` releases stock held by abandoned payments, and `python scripts/screenshots.py --base-url http://localhost:8080` regenerates the README screenshots.
 
 ## Configuration
 
-All configuration comes from environment variables, and the defaults are the secure choice.
+All configuration comes from environment variables, and the defaults are the secure choice. With Docker, set them in `.env`: `docker-compose.yml` passes every variable below through to the backend. The storefront quotes the pricing, cart and session rules in its copy; those numbers live in `frontend/src/lib/storeRules.ts`, and a backend test fails if they drift from the defaults here, so change both if you override them.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -190,7 +195,8 @@ All configuration comes from environment variables, and the defaults are the sec
 | `JWT_ACCESS_MINUTES` / `JWT_REFRESH_DAYS` | `10` / `7` | Token lifetimes |
 | `REFRESH_COOKIE_SECURE` | `true` | `Secure` flag on the refresh cookie (`localhost` counts as secure) |
 | `DJANGO_CACHE_BACKEND` | `locmem` | `db` shares throttle state across workers (used in compose) |
-| `THROTTLE_AUTH` / `THROTTLE_AUTH_REFRESH` / `THROTTLE_CHECKOUT` | `10/min` / `60/min` / `20/min` | Rate limits |
+| `THROTTLE_AUTH` / `THROTTLE_AUTH_REFRESH` / `THROTTLE_CHECKOUT` | `10/min` / `60/min` / `20/min` | Rate limits (credentials per IP, refresh per IP, checkout per user) |
+| `THROTTLE_ANON` / `THROTTLE_USER` | `120/min` / `600/min` | Global limits for everything else |
 | `NUM_PROXIES` | `0` | Trusted proxy hops for client IPs (`1` behind nginx) |
 | `DJANGO_HSTS_SECONDS` / `DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_BEHIND_TLS_PROXY` | `0` / `false` / `false` | TLS hardening for real deployments |
 | `PAYMENT_PROVIDER` | `apps.payments.providers.mock.MockPaymentProvider` | Dotted path to a `PaymentProvider` subclass |
@@ -216,20 +222,22 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 ## Testing
 
 ```bash
-cd backend && uv run pytest --cov     # 181 tests; set DATABASE_URL to run on PostgreSQL
-cd frontend && npm test               # 56 tests
-cd frontend && npm run e2e            # 15 Playwright + axe specs (needs a running, seeded API)
+cd backend && uv run pytest --cov     # 247 tests; set DATABASE_URL to run on PostgreSQL
+cd frontend && npm test               # 64 tests
+cd frontend && npm run e2e            # 18 Playwright + axe specs (needs a running, seeded API)
 ```
 
-**Backend** (97% line coverage): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling; a parametrized RBAC matrix proving anonymous users get `401` and customers `403` on every admin endpoint; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays, insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; and the dashboard maths.
+**Backend** (97% line coverage): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling, including password changes by a signed-in caller; an RBAC matrix built from the URL configuration itself, proving anonymous users get `401` and customers `403` on every admin route for every HTTP verb (55 cases), so a new admin endpoint is covered automatically; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays (a replayed decline repeats its `402`), insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; the JSON error envelope for unknown routes and unhandled errors (with no details leaked); the dashboard maths; and a contract test that keeps the rules the storefront quotes (`frontend/src/lib/storeRules.ts`) equal to the server's defaults.
 
-The key concurrency guarantee has its own test: **eight threads race to buy three units on PostgreSQL, and exactly three orders succeed while stock ends at zero.** It runs in CI against a PostgreSQL service container (and is skipped on SQLite).
+The concurrency guarantees have their own tests on PostgreSQL, with real threads: **eight shoppers race for three units and exactly three orders succeed while stock ends at zero; six retries with one idempotency key for the last unit all get the same single order; six refreshes with one token never mint more than one session; and a refund is requested without holding any product row lock.** They run in CI against a PostgreSQL service container (and are skipped on SQLite).
 
-**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, bag, sign-in, registration, admin guard, command palette and checkout (including a fresh idempotency key after a decline and inline validation). The tests wait on real milestones (MSW responses, loaded modules) rather than polling deadlines, so they behave the same on a loaded CI machine.
+**Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, bag, sign-in, registration, admin guard, command palette and checkout (including a fresh idempotency key after a decline, the same key on a retry after a dropped connection, with no claim that nothing was charged, and inline validation), noindex on private and not-found pages, and the footer credit. The tests wait on real milestones (MSW responses, loaded modules) rather than polling deadlines, so they behave the same on a loaded CI machine.
 
-**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, and the admin dashboard, palette and tables. Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
+**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, a checkout completed with the keyboard alone, noindex and robots.txt, the phone footer's 44px disclosure rows, and the admin dashboard, palette and tables. Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
 
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff, mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
+**Measured** (2026-10-22, the Docker stack behind nginx, every route in light and dark at 1440px and 390px): zero serious or critical axe violations, CLS at most 0.01, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 90 to 94. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 102 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
+
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
 
 ## Project structure
 
