@@ -3,7 +3,6 @@ import { Check, ChevronDown, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useSearchParams } from "react-router";
-import { z } from "zod";
 
 import { useAuth } from "@/auth/useAuth";
 import { Logo, LogoMark } from "@/components/layout/Logo";
@@ -12,7 +11,8 @@ import { TextField } from "@/components/ui/Field";
 import { ApiError, errorMessage } from "@/lib/api";
 import { protection } from "@/lib/protection";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
-import { safeNext } from "@/lib/validation";
+import { safeNext } from "@/lib/redirect";
+import { z } from "@/lib/zod";
 
 // Demo shortcuts for the seeded store. Disable with VITE_DEMO_MODE=false for real deployments.
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE !== "false";

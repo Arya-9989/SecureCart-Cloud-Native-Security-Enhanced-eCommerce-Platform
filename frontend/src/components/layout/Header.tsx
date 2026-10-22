@@ -12,10 +12,9 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { Dialog, DropdownMenu, Popover } from "radix-ui";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router";
-import { Drawer } from "vaul";
 
 import { useAuth } from "@/auth/useAuth";
 import { BagPanel } from "@/components/store/BagPanel";
@@ -26,6 +25,9 @@ import { useTheme } from "@/lib/theme";
 
 import { LogoMark } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
+
+// vaul is only needed on touch-sized screens, so it is not part of the desktop download.
+const BagDrawer = lazy(() => import("@/components/store/BagDrawer"));
 
 const iconButton =
   "relative flex size-11 items-center justify-center rounded-full text-fg/80 transition-colors hover:text-fg data-[state=open]:text-fg";
@@ -178,27 +180,25 @@ function BagButton() {
     );
   }
   return (
-    <Drawer.Root open={open} onOpenChange={setOpen}>
-      <Drawer.Trigger className={iconButton} aria-label={label}>
+    <Suspense
+      fallback={
+        // Same control while the drawer code loads; a tap opens it as soon as it arrives.
+        <button
+          type="button"
+          className={iconButton}
+          aria-label={label}
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          <BagIcon count={count} />
+        </button>
+      }
+    >
+      <BagDrawer open={open} onOpenChange={setOpen} triggerClassName={iconButton} label={label}>
         <BagIcon count={count} />
-      </Drawer.Trigger>
-      <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 z-50 bg-[var(--scrim)]" />
-        <Drawer.Content className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-[22px] bg-surface text-fg outline-none">
-          <div
-            className="mx-auto mt-3 h-1.5 w-10 shrink-0 rounded-full bg-line-strong"
-            aria-hidden
-          />
-          <Drawer.Title className="sr-only">Bag</Drawer.Title>
-          <Drawer.Description className="sr-only">
-            Items in your bag and links to your profile.
-          </Drawer.Description>
-          <div className="overflow-y-auto px-6 pt-4 pb-[max(24px,env(safe-area-inset-bottom))]">
-            <BagPanel onNavigate={close} />
-          </div>
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+      </BagDrawer>
+    </Suspense>
   );
 }
 
@@ -385,7 +385,7 @@ export function Header() {
       <div className="mx-auto flex h-12 w-full max-w-[1024px] items-center gap-2 px-2 sm:px-4">
         <Link
           to="/"
-          className="hit flex shrink-0 items-center gap-2 rounded-md px-2"
+          className="flex h-11 shrink-0 items-center gap-2 rounded-md px-2"
           aria-label="SecureCart home"
         >
           <LogoMark className="size-5.5" />

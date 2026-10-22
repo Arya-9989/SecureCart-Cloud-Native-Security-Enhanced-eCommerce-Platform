@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { formatMoney } from "./format";
-import { checkoutSchema, productSchema, safeNext } from "./validation";
+import { safeNext } from "./redirect";
+import { checkoutSchema, productSchema } from "./validation";
 
 describe("safeNext", () => {
   it.each([

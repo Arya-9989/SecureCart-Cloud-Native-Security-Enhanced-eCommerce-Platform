@@ -25,7 +25,7 @@ beforeAll(async () => {
 describe("Login", () => {
   it("validates input before calling the API", async () => {
     const { user } = renderApp("/login");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await user.click(await screen.findByRole("button", { name: "Sign in" }));
     expect(await screen.findByText("Enter a valid email address")).toBeInTheDocument();
     expect(screen.getByText("Enter your password")).toBeInTheDocument();
   });
@@ -40,7 +40,7 @@ describe("Login", () => {
       ),
     );
     const { user } = renderApp("/login");
-    await user.type(screen.getByLabelText("Email"), "maya@example.com");
+    await user.type(await screen.findByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "wrong");
     const answered = responseTo("POST", "/api/auth/login/");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -56,7 +56,7 @@ describe("Login", () => {
       ),
     );
     const { user, router } = renderApp("/login?next=%2Forders");
-    await user.type(screen.getByLabelText("Email"), "maya@example.com");
+    await user.type(await screen.findByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "SecureCart!Demo1");
     const ordersLoaded = responseTo("GET", "/api/orders/");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -70,7 +70,7 @@ describe("Login", () => {
       http.post("*/api/auth/login/", () => HttpResponse.json({ access: "tok", user: customer })),
     );
     const { user, router } = renderApp("/login?next=%2F%2Fevil.example.com");
-    await user.type(screen.getByLabelText("Email"), "maya@example.com");
+    await user.type(await screen.findByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "x");
     const answered = responseTo("POST", "/api/auth/login/");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -82,7 +82,7 @@ describe("Login", () => {
 
   it("explains how sign-in is protected", async () => {
     const { user } = renderApp("/login");
-    await user.click(screen.getByText("Protected sign-in"));
+    await user.click(await screen.findByText("Protected sign-in"));
     expect(screen.getByText(/Passwords are hashed with Argon2/)).toBeVisible();
     expect(screen.getByText(/httpOnly, Secure and SameSite=Strict/)).toBeVisible();
   });
@@ -105,7 +105,7 @@ describe("Register", () => {
       ),
     );
     const { user } = renderApp("/register");
-    await user.type(screen.getByLabelText("Full name"), "Maya Patel");
+    await user.type(await screen.findByLabelText("Full name"), "Maya Patel");
     await user.type(screen.getByLabelText("Email"), "maya@example.com");
     await user.type(screen.getByLabelText("Password"), "long-enough-pass");
     await user.type(screen.getByLabelText("Confirm password"), "long-enough-pass");
@@ -119,7 +119,7 @@ describe("Register", () => {
 
   it("checks that passwords match", async () => {
     const { user } = renderApp("/register");
-    await user.type(screen.getByLabelText("Password"), "long-enough-pass");
+    await user.type(await screen.findByLabelText("Password"), "long-enough-pass");
     await user.type(screen.getByLabelText("Confirm password"), "different-pass");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(await screen.findByText("Passwords don't match")).toBeInTheDocument();

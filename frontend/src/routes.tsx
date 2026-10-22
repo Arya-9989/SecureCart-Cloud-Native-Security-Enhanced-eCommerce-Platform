@@ -4,9 +4,7 @@ import { Outlet, ScrollRestoration, type RouteObject } from "react-router";
 import { RequireAdmin, RequireAuth } from "@/auth/guards";
 import { StoreLayout } from "@/components/layout/StoreLayout";
 import { PageSpinner } from "@/components/ui/Spinner";
-import { LoginPage, RegisterPage } from "@/pages/AuthPages";
 import { CartPage } from "@/pages/CartPage";
-import { CheckoutPage } from "@/pages/CheckoutPage";
 import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { OrderDetailPage } from "@/pages/OrderDetailPage";
@@ -14,6 +12,16 @@ import { OrdersPage } from "@/pages/OrdersPage";
 import { ProductPage } from "@/pages/ProductPage";
 import { ProtectionPage } from "@/pages/ProtectionPage";
 import { ShopPage } from "@/pages/ShopPage";
+
+// Pages with forms carry react-hook-form and zod, which the browsing pages never need, so
+// they load on demand instead of sitting in every visitor's first download.
+const LoginPage = lazy(() => import("@/pages/AuthPages").then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() =>
+  import("@/pages/AuthPages").then((m) => ({ default: m.RegisterPage })),
+);
+const CheckoutPage = lazy(() =>
+  import("@/pages/CheckoutPage").then((m) => ({ default: m.CheckoutPage })),
+);
 
 // The admin area (and its charting library) is code-split out of the storefront bundle.
 const AdminLayout = lazy(() =>
@@ -59,14 +67,14 @@ export const routes: RouteObject[] = [
           { path: "products/:slug", element: <ProductPage /> },
           { path: "protection", element: <ProtectionPage /> },
           { path: "cart", element: authed(<CartPage />) },
-          { path: "checkout", element: authed(<CheckoutPage />) },
+          { path: "checkout", element: authed(lazyPage(<CheckoutPage />)) },
           { path: "orders", element: authed(<OrdersPage />) },
           { path: "orders/:id", element: authed(<OrderDetailPage />) },
           { path: "*", element: <NotFoundPage /> },
         ],
       },
-      { path: "login", element: <LoginPage /> },
-      { path: "register", element: <RegisterPage /> },
+      { path: "login", element: lazyPage(<LoginPage />) },
+      { path: "register", element: lazyPage(<RegisterPage />) },
       {
         path: "admin",
         element: <RequireAdmin>{lazyPage(<AdminLayout />)}</RequireAdmin>,

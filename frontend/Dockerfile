@@ -10,6 +10,9 @@ COPY . .
 ARG VITE_DEMO_MODE=true
 ENV VITE_DEMO_MODE=${VITE_DEMO_MODE}
 RUN npm run build
+# Pre-compress text assets once at the highest level, so nginx (gzip_static) never has to.
+RUN find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' -o -name '*.html' \
+        -o -name '*.txt' \) -size +1k -exec gzip -9 -k -n {} +
 
 # ---- serve with unprivileged nginx (runs as uid 101, listens on 8080) -----------------
 FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS runtime

@@ -1,4 +1,4 @@
-import { m } from "motion/react";
+import { clsx } from "clsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /*
@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
  * visible, so a page that is printed, captured full-length or never scrolled shows all of its
  * content. Once armed, only content still below the fold is hidden, and it fades and lifts
  * (16px, 320ms, Apple's ease) the first time it enters the viewport. Users who prefer reduced
- * motion never arm it.
+ * motion never arm it. Plain CSS transitions on opacity and transform: no animation library.
  */
 let armed = false;
 const listeners = new Set<() => void>();
@@ -78,16 +78,17 @@ export function Reveal({
     };
   }, []);
 
-  const Component = m[as];
+  const Component = as;
   return (
     <Component
       ref={ref as never}
-      className={className}
-      initial={false}
-      animate={phase === "hidden" ? { opacity: 0, y: 16 } : { opacity: 1, y: 0 }}
-      transition={
-        phase === "hidden" ? { duration: 0 } : { duration: 0.32, ease: [0.4, 0, 0.6, 1], delay }
-      }
+      className={clsx(
+        className,
+        phase === "hidden" && "translate-y-4 opacity-0",
+        phase === "shown" &&
+          "translate-y-0 opacity-100 transition-[opacity,transform] duration-[320ms] ease-(--ease-apple)",
+      )}
+      style={phase === "shown" && delay ? { transitionDelay: `${delay}s` } : undefined}
     >
       {children}
     </Component>

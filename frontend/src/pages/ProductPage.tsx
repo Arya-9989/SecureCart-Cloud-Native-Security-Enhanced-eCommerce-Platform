@@ -1,6 +1,5 @@
 import { clsx } from "clsx";
 import { Lock, PackageX, RefreshCcw, Truck } from "lucide-react";
-import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useParams } from "react-router";
 
@@ -30,7 +29,6 @@ const VIEWS = [
 
 function Gallery({ product }: { product: Product }) {
   const [index, setIndex] = useState(0);
-  const view = VIEWS[index] ?? VIEWS[0];
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === "ArrowRight") setIndex((i) => (i + 1) % VIEWS.length);
     if (event.key === "ArrowLeft") setIndex((i) => (i - 1 + VIEWS.length) % VIEWS.length);
@@ -38,25 +36,26 @@ function Gallery({ product }: { product: Product }) {
   return (
     <div>
       <div className="studio relative aspect-[4/3] overflow-hidden rounded-[28px]">
-        <AnimatePresence initial={false}>
-          <m.div
-            key={view.id}
-            className="absolute inset-0"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.32, ease: [0.4, 0, 0.6, 1] }}
+        {/* Both views stay mounted and cross-fade (opacity only, 320ms, Apple's ease). */}
+        {VIEWS.map((v, i) => (
+          <div
+            key={v.id}
+            className={clsx(
+              "absolute inset-0 transition-opacity duration-[320ms] ease-(--ease-apple)",
+              i === index ? "opacity-100" : "opacity-0",
+            )}
+            aria-hidden={i !== index}
           >
             <ProductImage
               src={product.image_url}
-              alt={`${product.name}, ${view.label.toLowerCase()}`}
-              eager
+              alt={i === index ? `${product.name}, ${v.label.toLowerCase()}` : ""}
+              eager={i === 0}
               className="size-full"
               // Close-up: scale the same art around its optical centre.
-              style={{ transform: `scale(${view.scale})`, transformOrigin: "50% 62%" }}
+              style={{ transform: `scale(${v.scale})`, transformOrigin: "50% 62%" }}
             />
-          </m.div>
-        </AnimatePresence>
+          </div>
+        ))}
       </div>
       <div
         role="radiogroup"
@@ -241,37 +240,35 @@ function StickyBuyBar({
   }, [buyRef]);
 
   return (
-    <AnimatePresence>
-      {visible && (
-        <m.div
-          className="glass fixed inset-x-0 top-12 z-30 border-b border-line/60"
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.24, ease: [0.4, 0, 0.6, 1] }}
-        >
-          <div className="container-page flex h-[52px] items-center gap-4">
-            <p className="min-w-0 truncate text-[17px] font-semibold tracking-[-0.02em]">
-              {product.name}
-            </p>
-            <p className="ml-auto hidden text-[14px] text-muted tabular-nums sm:block">
-              {formatMoney(product.price)}
-            </p>
-            <Button
-              size="sm"
-              className="ml-auto sm:ml-0"
-              disabled={soldOut}
-              loading={isPending}
-              onClick={() => {
-                add(product.id, 1, product.name);
-              }}
-            >
-              {soldOut ? "Sold out" : "Add to Bag"}
-            </Button>
-          </div>
-        </m.div>
+    <div
+      className={clsx(
+        "glass fixed inset-x-0 top-12 z-30 border-b border-line/60 transition-[opacity,transform] duration-[240ms] ease-(--ease-apple)",
+        visible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-3 opacity-0",
       )}
-    </AnimatePresence>
+      // Hidden from assistive tech and the tab order until it slides in.
+      inert={!visible}
+      aria-hidden={!visible}
+    >
+      <div className="container-page flex h-[52px] items-center gap-4">
+        <p className="min-w-0 truncate text-[17px] font-semibold tracking-[-0.02em]">
+          {product.name}
+        </p>
+        <p className="ml-auto hidden text-[14px] text-muted tabular-nums sm:block">
+          {formatMoney(product.price)}
+        </p>
+        <Button
+          size="sm"
+          className="ml-auto sm:ml-0"
+          disabled={soldOut}
+          loading={isPending}
+          onClick={() => {
+            add(product.id, 1, product.name);
+          }}
+        >
+          {soldOut ? "Sold out" : "Add to Bag"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
