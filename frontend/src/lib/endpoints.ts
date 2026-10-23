@@ -61,6 +61,17 @@ export const authApi = {
       body: { token },
       noRetry: true,
     }),
+  updateProfile: (full_name: string) =>
+    apiFetch<User>("/auth/me/", { method: "PATCH", body: { full_name } }),
+  changePassword: (current_password: string, new_password: string) =>
+    apiFetch<TokenResponse>("/auth/password/", {
+      method: "POST",
+      body: { current_password, new_password },
+      noRetry: true,
+    }),
+  revokeSessions: () => apiFetch<undefined>("/auth/sessions/revoke/", { method: "POST" }),
+  deleteAccount: (password: string) =>
+    apiFetch<undefined>("/auth/me/delete/", { method: "POST", body: { password }, noRetry: true }),
   resendVerification: () => apiFetch<{ detail: string }>("/auth/email/resend/", { method: "POST" }),
 };
 

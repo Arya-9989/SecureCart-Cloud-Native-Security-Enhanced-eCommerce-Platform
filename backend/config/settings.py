@@ -166,6 +166,7 @@ REST_FRAMEWORK: dict[str, Any] = {
         # can flood someone else's inbox (see apps.accounts.throttles).
         "account_email": env_str("THROTTLE_ACCOUNT_EMAIL", "5/min"),
         "account_email_recipient": env_str("THROTTLE_ACCOUNT_EMAIL_RECIPIENT", "3/hour"),
+        "account_data": env_str("THROTTLE_ACCOUNT_DATA", "10/hour"),
     },
     "NUM_PROXIES": env_int("NUM_PROXIES", 0),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",

@@ -50,6 +50,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 - Order history and detail with a status tracker, event timeline and self-service cancellation before shipping (restock and refund), plus a PDF invoice for every paid order, rendered on the server from the order's own snapshot.
 - Registration and sign-in, light/dark themes, responsive layouts, and loading, empty and error states throughout.
 - Public pages (home, shop and each category, `/protection` and every product) are prerendered at build time and hydrated, so they read completely before, or without, any JavaScript.
+- An account page: change your name or password, see whether your email is confirmed, sign out on every device at once, download a copy of your data (JSON), and delete the account. Deletion anonymises it; orders are kept for invoicing.
 - Email confirmation and password reset by emailed one-time link. Checkout waits for a confirmed address; the bag and checkout say why and offer a fresh link.
 - A "How your order is protected" page (`/protection`), told as four moments that light up stage by stage as you scroll, and quiet trust cues at sign-in, bag, checkout and order confirmation. Every statement describes a mechanism in this codebase and links to it; the copy lives in one file (`frontend/src/lib/protection.ts`).
 
@@ -271,6 +272,7 @@ All configuration comes from environment variables, and the defaults are the sec
 | `PASSWORD_RESET_TTL_MINUTES` / `EMAIL_VERIFICATION_TTL_HOURS` | `30` / `24` | Link lifetimes |
 | `REQUIRE_VERIFIED_EMAIL` | `true` | Checkout requires a confirmed address |
 | `THROTTLE_ACCOUNT_EMAIL` / `THROTTLE_ACCOUNT_EMAIL_RECIPIENT` | `5/min` / `3/hour` | Mail-sending limits per IP and per inbox |
+| `THROTTLE_ACCOUNT_DATA` | `10/hour` | Data exports per user |
 | `ACCOUNT_RECOVERY_MIN_RESPONSE_MS` | `400` | Minimum forgot-password response time |
 | `EMAIL_DELIVERY` / `EMAIL_SEND_ATTEMPTS` / `EMAIL_RETRY_BACKOFF_SECONDS` | `background` / `3` / `2` | Send after commit on a worker thread, with retries |
 
@@ -281,6 +283,7 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 | Area | Endpoints | Access |
 |---|---|---|
 | Auth | `POST /api/auth/register/`, `login/`, `refresh/`, `logout/` · `GET/PATCH /api/auth/me/` · `POST /api/auth/password/` | Public / authenticated |
+| Account | `POST /api/auth/sessions/revoke/` (sign out everywhere) · `GET /api/auth/me/export/` (JSON download) · `POST /api/auth/me/delete/` (password required; `409` with open orders or for admins) | Authenticated |
 | Recovery | `POST /api/auth/password/forgot/` (always `202`) · `POST /api/auth/password/reset/` · `POST /api/auth/email/verify/` · `POST /api/auth/email/resend/` (authenticated) | Public / authenticated |
 | Catalog | `GET /api/products/` (`search`, `category`, `min_price`, `max_price`, `in_stock`, `featured`, `ordering`, `page`) · `GET /api/products/{slug}/` · `GET /api/categories/` | Public |
 | Cart | `GET/DELETE /api/cart/` · `POST /api/cart/items/` · `PATCH/DELETE /api/cart/items/{id}/` | Customer (own cart) |

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 
 import { hasSession, mayHaveSession, onSessionChange, refreshSession, setSession } from "@/lib/api";
 import { authApi } from "@/lib/endpoints";
-import type { User } from "@/lib/types";
+import type { TokenResponse, User } from "@/lib/types";
 
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./context";
 
@@ -73,9 +73,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apply(await authApi.me());
   }, [apply]);
 
+  const adopt = useCallback(
+    (data: TokenResponse) => {
+      setSession(data.access);
+      apply(data.user);
+    },
+    [apply],
+  );
+
+  const forget = useCallback(() => {
+    setSession(null);
+    apply(null);
+    queryClient.clear();
+  }, [apply, queryClient]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, isAdmin: user?.role === "admin", login, register, logout, reloadUser }),
-    [status, user, login, register, logout, reloadUser],
+    () => ({
+      status,
+      user,
+      isAdmin: user?.role === "admin",
+      login,
+      register,
+      logout,
+      reloadUser,
+      adopt,
+      forget,
+    }),
+    [status, user, login, register, logout, reloadUser, adopt, forget],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

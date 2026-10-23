@@ -25,6 +25,7 @@ REST_FRAMEWORK = {
         "checkout": "10000/min",
         "account_email": "10000/min",
         "account_email_recipient": "10000/min",
+        "account_data": "10000/min",
     },
 }
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"

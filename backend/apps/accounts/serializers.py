@@ -80,6 +80,10 @@ class ResetPasswordSerializer(serializers.Serializer[None]):
     new_password = serializers.CharField(trim_whitespace=False, max_length=128)
 
 
+class DeleteAccountSerializer(serializers.Serializer[None]):
+    password = serializers.CharField(trim_whitespace=False, max_length=128)
+
+
 class DetailSerializer(serializers.Serializer[None]):
     detail = serializers.CharField()
 

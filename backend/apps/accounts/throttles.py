@@ -46,6 +46,17 @@ class AccountEmailRateThrottle(_PerIPThrottle):
     fail_open = False
 
 
+class AccountDataRateThrottle(AtomicRateThrottle):
+    """Per-user limit for the data export (it reads the whole account history)."""
+
+    scope = "account_data"
+
+    def get_cache_key(self, request: Request, view: APIView) -> str | None:
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return self.cache_format % {"scope": self.scope, "ident": request.user.pk}
+
+
 class RecipientBudget(AtomicRateThrottle):
     """Per-recipient budget for account emails, keyed by a hash of the address.
 

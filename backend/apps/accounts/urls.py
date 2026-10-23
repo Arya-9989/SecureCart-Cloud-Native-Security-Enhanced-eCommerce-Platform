@@ -13,4 +13,7 @@ urlpatterns = [
     path("password/reset/", views.ResetPasswordView.as_view(), name="auth-password-reset"),
     path("email/verify/", views.VerifyEmailView.as_view(), name="auth-email-verify"),
     path("email/resend/", views.ResendVerificationView.as_view(), name="auth-email-resend"),
+    path("sessions/revoke/", views.RevokeSessionsView.as_view(), name="auth-sessions-revoke"),
+    path("me/export/", views.ExportDataView.as_view(), name="auth-me-export"),
+    path("me/delete/", views.DeleteAccountView.as_view(), name="auth-me-delete"),
 ]

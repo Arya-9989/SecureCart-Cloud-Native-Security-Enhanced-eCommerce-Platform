@@ -28,6 +28,9 @@ const ResetPasswordPage = lazy(() =>
 const VerifyEmailPage = lazy(() =>
   import("@/pages/AccountPages").then((m) => ({ default: m.VerifyEmailPage })),
 );
+const AccountSettingsPage = lazy(() =>
+  import("@/pages/AccountSettingsPage").then((m) => ({ default: m.AccountSettingsPage })),
+);
 const CheckoutPage = lazy(() =>
   import("@/pages/CheckoutPage").then((m) => ({ default: m.CheckoutPage })),
 );
@@ -78,6 +81,7 @@ export const routes: RouteObject[] = [
           { path: "cart", element: authed(<CartPage />) },
           { path: "checkout", element: authed(lazyPage(<CheckoutPage />)) },
           { path: "orders", element: authed(<OrdersPage />) },
+          { path: "account", element: authed(lazyPage(<AccountSettingsPage />)) },
           { path: "orders/:id", element: authed(<OrderDetailPage />) },
           { path: "*", element: <NotFoundPage /> },
         ],

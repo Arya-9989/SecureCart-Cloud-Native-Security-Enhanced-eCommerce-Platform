@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Count, QuerySet
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -23,7 +24,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 from rest_framework.views import APIView
 
-from apps.accounts import emails, onetime, tokens
+from apps.accounts import emails, onetime, selfservice, tokens
 from apps.accounts.cookies import (
     clear_refresh_cookie,
     has_csrf_header,
@@ -35,6 +36,7 @@ from apps.accounts.permissions import IsAdminRole
 from apps.accounts.serializers import (
     AdminUserSerializer,
     ChangePasswordSerializer,
+    DeleteAccountSerializer,
     DetailSerializer,
     ForgotPasswordSerializer,
     LoginSerializer,
@@ -45,6 +47,7 @@ from apps.accounts.serializers import (
     UserSerializer,
 )
 from apps.accounts.throttles import (
+    AccountDataRateThrottle,
     AccountEmailRateThrottle,
     AuthRateThrottle,
     RecipientBudget,
@@ -212,6 +215,80 @@ class ChangePasswordView(APIView):
             tokens.revoke_all(user)
         audit.record("auth.password_changed", request=request, target=user)
         return _token_response(user, tokens.issue_tokens(user))
+
+
+class RevokeSessionsView(APIView):
+    """Sign out everywhere: ends every session, including this one."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=None, responses={204: None}, tags=["auth"], summary="Sign out on every device"
+    )
+    def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        revoked = tokens.revoke_all(user)
+        audit.record(
+            "auth.sessions_revoked", request=request, target=user, changes={"revoked": revoked}
+        )
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        clear_refresh_cookie(response)
+        return response
+
+
+class ExportDataView(APIView):
+    """Everything the store holds about the signed-in user, as a JSON download."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AccountDataRateThrottle]
+
+    @extend_schema(
+        responses={(200, "application/json"): OpenApiTypes.OBJECT},
+        tags=["auth"],
+        summary="Download a copy of my data (profile, orders, bag, account activity)",
+    )
+    def get(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        audit.record("auth.data_exported", request=request, target=user)
+        response = Response(selfservice.export(user))
+        stamp = timezone.now().strftime("%Y%m%d")
+        response["Content-Disposition"] = f'attachment; filename="securecart-data-{stamp}.json"'
+        return response
+
+
+class DeleteAccountView(APIView):
+    """Delete (anonymise) the signed-in account after re-entering the password."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthRateThrottle]
+
+    @extend_schema(
+        request=DeleteAccountSerializer,
+        responses={
+            204: None,
+            400: OpenApiResponse(description="Wrong password"),
+            409: OpenApiResponse(description="Open orders, or an administrator account"),
+        },
+        tags=["auth"],
+        summary="Delete my account (orders are kept, anonymised, for accounting)",
+    )
+    def post(self, request: Request) -> Response:
+        serializer = DeleteAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = cast(User, request.user)
+        if not user.check_password(serializer.validated_data["password"]):
+            raise ValidationError({"password": ["Incorrect password."]})
+        try:
+            selfservice.delete(user)
+        except selfservice.DeletionRefused as exc:
+            return Response(
+                {"error": {"code": exc.code, "message": exc.message}},
+                status=status.HTTP_409_CONFLICT,
+            )
+        audit.record("auth.account_deleted", request=request, actor=user, target=user)
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        clear_refresh_cookie(response)
+        return response
 
 
 def _send_verification(user: User) -> None:
