@@ -34,7 +34,7 @@ Customers browse a catalog, manage a server-side cart, check out and track order
   <img src="docs/screenshots/mobile-admin.png" width="230" alt="Mobile admin dashboard">
 </p>
 
-More screenshots: [how your order is protected](docs/screenshots/protection.png) ([the four-moments story, scrolling](docs/screenshots/protection-story.gif)) · [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [bag](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
+More screenshots: [account settings](docs/screenshots/account.png) · [password reset](docs/screenshots/forgot-password.png) · [product image upload](docs/screenshots/admin-product-image.png) · [how your order is protected](docs/screenshots/protection.png) ([the four-moments story, scrolling](docs/screenshots/protection-story.gif)) · [shop](docs/screenshots/shop.png) · [product](docs/screenshots/product.png) · [bag](docs/screenshots/cart.png) · [order history](docs/screenshots/orders.png) · [sign in](docs/screenshots/login.png) · [admin products](docs/screenshots/admin-products.png) · [product editor](docs/screenshots/admin-product-edit.png) · [order fulfilment](docs/screenshots/admin-order-detail.png) · [audit log](docs/screenshots/admin-audit-log.png) · [dark mode](docs/screenshots/home-dark.png)
 
 > All screenshots are captured from the Docker stack by [`scripts/screenshots.py`](scripts/screenshots.py), which drives the real UI against the seeded demo data. Product images are original SVGs drawn by [`scripts/generate_product_art.py`](scripts/generate_product_art.py).
 
@@ -146,7 +146,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 | **File uploads** | Admin-only product image uploads accept only JPEG, PNG and WebP by magic bytes (client filenames and types are ignored, so SVG is out). Polyglots are refused: markup markers anywhere, or bytes after the image's own end. Images are capped at 5 MB and 40 megapixels, decoded fully, and re-encoded to WebP with no EXIF, GPS, ICC or text chunks. They are stored under random keys in a private bucket and served through the API with `nosniff`, a `default-src 'none'; sandbox` CSP and an explicit `image/webp` type ([ADR 0005](docs/adr/0005-product-image-uploads.md)). |
 | **Payment webhooks** | Stripe events are accepted only with a valid `Stripe-Signature` (HMAC-SHA256 over the raw body, any of several `v1` signatures during a secret rotation) and a timestamp under 5 minutes old. The event id is stored in the same transaction as its effect, so a replay or a concurrent redelivery changes nothing, and a failed effect is retried by Stripe. A PaymentIntent must name one of our Stripe orders, match the stored reference and carry exactly the order's amount and currency; live events are refused by a test-mode store. A charge whose outcome is unknown (a timeout) is never treated as a decline, and money that arrives for an order already cancelled is refunded ([ADR 0003](docs/adr/0003-stripe-payment-intents-and-webhooks.md)). |
 | **Audit trail** | Append-only `AuditLog` for admin create/update/delete, order transitions, role changes, logins, failed logins, password changes and refresh-token reuse, with actor, diff, client IP (proxy-aware) and request ID. |
-| **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`). |
+| **Containers** | Non-root users, read-only root filesystems, `no-new-privileges`, all Linux capabilities dropped, health checks, and no secrets in images (compose refuses to start without `DJANGO_SECRET_KEY`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD` and `MINIO_ROOT_PASSWORD`). |
 | **Image scanning** | CI scans every image compose runs with Trivy ([`scripts/scan_images.sh`](scripts/scan_images.sh)) and fails on any HIGH or CRITICAL vulnerability that has a fix. Trivy itself is a pinned release checked against a SHA-256 taken from its Sigstore-verified checksums file. Accepted findings live in [`.trivyignore.yaml`](.trivyignore.yaml): one entry per CVE, scoped to one file, with evidence and an expiry date at most 90 days out, after which the gate fails again ([ADR 0001](docs/adr/0001-container-image-scanning.md)). Dockerfiles are linted with hadolint. |
 
 ## Tech stack
@@ -165,7 +165,7 @@ Row locks are held only for the reservation transaction, never across the paymen
 ### With Docker (recommended)
 
 ```bash
-cp .env.example .env    # then set DJANGO_SECRET_KEY and POSTGRES_PASSWORD
+cp .env.example .env    # then set DJANGO_SECRET_KEY, POSTGRES_PASSWORD, REDIS_PASSWORD, MINIO_ROOT_PASSWORD
 docker compose up --build
 ```
 
@@ -298,22 +298,39 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 ## Testing
 
 ```bash
-cd backend && uv run pytest --cov     # 249 tests; set DATABASE_URL to run on PostgreSQL
-cd frontend && npm test               # 83 tests
-cd frontend && npm run e2e            # 23 Playwright + axe specs (needs a running, seeded API)
+cd backend && uv run pytest --cov     # 531 tests; set DATABASE_URL for PostgreSQL, and
+                                      # MAILPIT_URL, STRIPE_MOCK_URL, REDIS_URL, MINIO_URL
+                                      # for the integration tests (CI sets all of them)
+cd frontend && npm test               # 115 tests
+cd frontend && npm run e2e            # 29 Playwright + axe specs (needs a running, seeded API)
 ```
 
-**Backend** (97% line coverage): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling, including password changes by a signed-in caller; an RBAC matrix built from the URL configuration itself, proving anonymous users get `401` and customers `403` on every admin route for every HTTP verb (55 cases), so a new admin endpoint is covered automatically; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays (a replayed decline repeats its `402`), insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; the JSON error envelope for unknown routes and unhandled errors (with no details leaked); the dashboard maths; and a contract test that keeps the rules the storefront quotes (`frontend/src/lib/storeRules.ts`) equal to the server's defaults.
+**Backend** (98% line coverage on PostgreSQL with every service): registration and password policy; cookie attributes; refresh rotation and reuse detection; revocation on logout and password change; throttling, including password changes by a signed-in caller; an RBAC matrix built from the URL configuration itself, proving anonymous users get `401` and customers `403` on every admin route for every HTTP verb (55 cases), so a new admin endpoint is covered automatically; object isolation (other users' orders and cart items return `404`); immediate effect of demotion and suspension; checkout success, idempotent replays (a replayed decline repeats its `402`), insufficient stock with full rollback, declined payments releasing stock and an order cancelled while payment is in flight; the complete state-machine transition table; failed refunds rolling back; pending-order expiry; catalog filters and validation; audit diffs; security headers; the JSON error envelope for unknown routes and unhandled errors (with no details leaked); the dashboard maths; and a contract test that keeps the rules the storefront quotes (`frontend/src/lib/storeRules.ts`) equal to the server's defaults. The roadmap features add:
+- **Account recovery:** one-time tokens (hashed, single-use, expiring, superseded), byte-identical and time-padded forgot-password answers, inbox budgets, sessions ending on reset, and real SMTP delivery through Mailpit.
+- **Stripe:** signed webhook fixtures generated with Stripe's algorithm (bad, stale, tampered, rotated, replayed and live-mode events), stripe-mock contract tests and reconciliation.
+- **Redis:** atomic rate limits under contention, and catalog-cache invalidation on every write path.
+- **Scheduler:** job leases.
+- **Image uploads:** SVG, polyglots, trailing data, decompression bombs, metadata stripping and private-bucket checks, against MinIO.
+- **Invoices:** parsed back from the PDF.
+- **Account and admin:** account export and deletion, the CSV export's formula neutralising, and JSON logs carrying request IDs.
 
-The concurrency guarantees have their own tests on PostgreSQL, with real threads: **eight shoppers race for three units and exactly three orders succeed while stock ends at zero; six retries with one idempotency key for the last unit all get the same single order; six refreshes with one token never mint more than one session; and a refund is requested without holding any product row lock.** They run in CI against a PostgreSQL service container (and are skipped on SQLite).
+The concurrency guarantees have their own tests on PostgreSQL, with real threads: **eight shoppers race for three units and exactly three orders succeed while stock ends at zero; six retries with one idempotency key for the last unit all get the same single order; six refreshes with one token never mint more than one session; a refresh racing a full revocation never leaves a live session (this test fails without the session epoch); one reset link submitted six times at once succeeds once; six simultaneous deliveries of one Stripe event pay the order once; eight scheduler instances ticking together run a job once; and a refund is requested without holding any product row lock.** They run in CI against a PostgreSQL service container (and are skipped on SQLite).
 
 **Frontend**: the API client (silent refresh on `401`, deduplicated concurrent refreshes, no refresh for anonymous calls, nested field errors), redirect-target sanitising, form schemas, and full route rendering with MSW for the shop, product, bag, sign-in, registration, admin guard, command palette and checkout (including a fresh idempotency key after a decline, the same key on a retry after a dropped connection, with no claim that nothing was charged, and inline validation), noindex on private and not-found pages, and the footer credit. The prerender is tested end to end in Node: every page's HTML carries its content and no inline script, hydrating it produces no mismatch, and a product still showing build-time data is confirmed against the live API before it is added to the bag. The motion tests cover the story's static, reduced-motion and scripted states, the add-to-bag cue with and without motion, and the chart draw-in. The tests wait on real milestones (MSW responses, loaded modules) rather than polling deadlines, so they behave the same on a loaded CI machine.
 
-**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, a checkout completed with the keyboard alone, noindex and robots.txt, the phone footer's 44px disclosure rows, and the admin dashboard, palette and tables; the public pages with JavaScript off, hydration in place, the four-moments story at points through its pinned range, the card-to-page morph, and reduced motion (every stage lit, no view transition). Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
+**End-to-end**: Playwright drives the production build (served by `vite preview` with nginx's exact CSP and headers) against a live, seeded API: home in both themes, shop filters, search, the protection page, the product page and its sticky buy bar, the bag popover and mobile drawer, a real checkout through the mock provider plus the decline path, a checkout completed with the keyboard alone, noindex and robots.txt, the phone footer's 44px disclosure rows, and the admin dashboard, palette and tables; account recovery through real SMTP (register, confirm, reset, sign in with the new password, a replayed link refused); an admin image upload served back as sanitised WebP; an invoice download with another account refused; and the account page's data export and deletion; the public pages with JavaScript off, hydration in place, the four-moments story at points through its pinned range, the card-to-page morph, and reduced motion (every stage lit, no view transition). Every page is checked with axe-core (WCAG 2.2 A/AA, zero serious or critical violations), every test fails on any console error or CSP violation, and the suite checks for horizontal overflow at 390px and infinite animations under reduced motion.
 
-**Measured** (2026-10-23, the Docker stack behind nginx, every audited route in light and dark at 1440px and 390px): no axe violations reported, CLS at most 0.0072, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 89 to 94 on the public routes and 90 to 93 on the signed-in ones; it moves by a point or two between runs on the same build (three repeat runs of a product page gave 90, 91 and 90). With JavaScript off, the measured public pages (home, shop, a category, `/protection` and a product page) show 100% of the words they show with it on; scrolling those pages drops no frames (0% of frames over 20 ms), and with reduced motion no text is left hidden. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 101 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
+**Measured** (2026-10-23, the Docker stack behind nginx, every audited route in light and dark at 1440px and 390px): no axe violations reported, CLS at most 0.0072, no horizontal overflow, no touch target under 24px, no console or CSP errors, and Lighthouse desktop 100 for performance, accessibility, best practices and SEO on every public route. Mobile performance (simulated slow 4G, 4x CPU) is 89 to 94 on the public routes and 90 to 93 on the signed-in ones; it moves by a point or two between runs on the same build (three repeat runs of a product page gave 90, 91 and 90). With JavaScript off, the measured public pages (home, shop, a category, `/protection` and a product page) show 100% of the words they show with it on (the sign-in and password-reset forms are not prerendered and need JavaScript, as before); scrolling those pages drops no frames (0% of frames over 20 ms), and with reduced motion no text is left hidden. The bag, checkout, orders, admin and not-found pages score 63 to 66 on Lighthouse SEO by design: their `noindex` fails its "is crawlable" audit, which is the only SEO audit they fail. The first visit downloads about 75 KB of app JavaScript plus 101 KB of React (gzipped); forms, toasts, the phone bag drawer and the admin charts load on demand.
 
-**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks and pytest on PostgreSQL with a 90% coverage gate; ESLint, Prettier, `tsc`, Vitest and the production build; the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL, inside Playwright's pinned image on two workers. That job used to take up to 14 minutes, almost all of it apt installing browser libraries at 28.6 kB/s; in CI-equivalent local runs it takes 85 to 93 seconds; Trivy and hadolint on every image and Dockerfile; renders both Kubernetes overlays and validates them with `kubeconform -strict` and `trivy config`; then builds both images, starts the compose stack with `--wait` on its health checks and smoke-tests it through nginx. Actions are pinned to commit SHAs.
+**CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs these jobs:
+- **Backend:** Ruff (backend and `scripts/`), mypy, migration-drift and OpenAPI validation checks, then pytest with a 90% coverage gate on PostgreSQL, with Mailpit, stripe-mock, Redis and MinIO beside it.
+- **Frontend:** ESLint, Prettier, `tsc`, Vitest and the production build.
+- **End-to-end:** the Playwright + axe suite against gunicorn (DEBUG off) on a seeded PostgreSQL, inside Playwright's pinned image on two workers. This job used to take up to 14 minutes, almost all of it apt installing browser libraries (20.6 MB at 28.6 kB/s on one run); in CI-equivalent local runs it now takes 85 to 108 seconds.
+- **Image scan:** Trivy on every image and hadolint on both Dockerfiles.
+- **Kubernetes:** both overlays rendered, then checked with `kubeconform -strict` and `trivy config`.
+- **Docker:** builds the images, starts the compose stack with `--wait` on its health checks, and smoke-tests it through nginx (Redis cache hit, scheduler heartbeat, reset email arriving in Mailpit).
+
+Actions are pinned to commit SHAs.
 
 ## Project structure
 
@@ -322,14 +339,14 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 ├── backend/
 │   ├── config/                 # env-driven settings, URLs, test settings
 │   ├── apps/
-│   │   ├── accounts/           # user model, JWT cookie flow, RBAC permission, admin user API
-│   │   ├── catalog/            # categories, products, public + admin viewsets, demo data
+│   │   ├── accounts/           # users, JWT cookie flow + session epoch, RBAC, recovery, self-service
+│   │   ├── catalog/            # products, categories, catalog cache, image uploads, demo data
 │   │   ├── cart/               # server-side cart
-│   │   ├── orders/             # checkout service, state machine, pricing, order APIs
-│   │   ├── payments/           # PaymentProvider interface, mock provider, registry
+│   │   ├── orders/             # checkout, state machine, pricing, invoices, CSV export
+│   │   ├── payments/           # PaymentProvider, mock + Stripe providers, signed webhooks
 │   │   ├── audit/              # audit log model, service and admin API
 │   │   ├── dashboard/          # admin KPIs
-│   │   └── core/               # middleware, error envelope, health check, seed_demo
+│   │   └── core/               # middleware, logging, rate limiter, scheduler, health, seed_demo
 │   ├── tests/                  # pytest suite
 │   └── Dockerfile, docker-entrypoint.sh, pyproject.toml, uv.lock
 ├── frontend/
@@ -346,9 +363,12 @@ The concurrency guarantees have their own tests on PostgreSQL, with real threads
 │   ├── scripts/prerender.mjs   # build-time prerender (and snapshot capture)
 │   ├── nginx/                  # server config and security headers
 │   └── Dockerfile, package.json, package-lock.json
-├── scripts/                    # product-art generator, screenshot capture
+├── deploy/k8s/                 # Kustomize base, kind + production overlays, kind scripts
+├── scripts/                    # image scanning, product-art generator, screenshot capture
+├── docs/adr/                   # architecture decision records
 ├── docs/screenshots/
 ├── docker-compose.yml
+├── .trivyignore.yaml           # accepted scanner findings, each scoped and expiring
 └── .env.example
 ```
 
