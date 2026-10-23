@@ -107,7 +107,7 @@ services:
       redis:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
 
   # Periodic jobs (settle unpaid orders, purge expired tokens). Safe to scale: each job runs
   # once per interval across all instances (database lease, apps.core.scheduler).
@@ -184,6 +184,12 @@ services:
       MINIO_BROWSER: "off"
     volumes:
       - media:/data
+    healthcheck:
+      # The image has no curl; its bundled mc client asks the server's health API instead.
+      test: ["CMD-SHELL", "MC_CONFIG_DIR=/tmp/.mc MC_HOST_local=\"http://$${MINIO_ROOT_USER}:$${MINIO_ROOT_PASSWORD}@127.0.0.1:9000\" mc ready local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     tmpfs:
       - /tmp
 
