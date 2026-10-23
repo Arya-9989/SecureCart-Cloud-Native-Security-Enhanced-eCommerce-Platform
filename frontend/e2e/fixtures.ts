@@ -3,6 +3,8 @@ import { test as base, expect, type APIRequestContext, type Page } from "@playwr
 
 export const ACCOUNTS = {
   customer: { email: "maya@example.com", password: "SecureCart!Demo1" },
+  // A second seeded shopper, so specs that change a bag never share one when run in parallel.
+  bagShopper: { email: "liam@example.com", password: "SecureCart!Demo1" },
   admin: { email: "admin@securecart.dev", password: "SecureCart!Admin1" },
 } as const;
 
@@ -72,9 +74,9 @@ export async function apiAuth(
   return { Authorization: `Bearer ${access}` };
 }
 
-/** Empties the customer's server-side bag so each test starts from a known state. */
-export async function emptyBag(request: APIRequestContext): Promise<void> {
-  const headers = await apiAuth(request, "customer");
+/** Empties a shopper's server-side bag so each test starts from a known state. */
+export async function emptyBag(request: APIRequestContext, who: Who = "customer"): Promise<void> {
+  const headers = await apiAuth(request, who);
   const response = await request.delete("/api/cart/", { headers });
   expect([200, 204]).toContain(response.status());
 }

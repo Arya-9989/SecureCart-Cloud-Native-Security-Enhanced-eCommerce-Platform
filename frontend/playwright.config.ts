@@ -12,9 +12,11 @@ const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Spec files run on two workers; tests within a file stay in order. Specs that change a
+  // shopper's bag use different seeded accounts (see e2e/fixtures.ts), and stock is drawn
+  // from the best-stocked product, so files never step on each other.
   fullyParallel: false,
-  // Specs share one seeded database (bag, stock, orders), so they run in order.
-  workers: 1,
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",

@@ -2,7 +2,7 @@ import { emptyBag, expect, expectAccessible, signIn, test, wellStockedProduct } 
 
 test.describe("Bag", () => {
   test.beforeEach(async ({ request }) => {
-    await emptyBag(request);
+    await emptyBag(request, "bagShopper");
   });
 
   test("add from the product page, preview it from the nav, review it", async ({
@@ -10,7 +10,7 @@ test.describe("Bag", () => {
     request,
   }) => {
     const product = await wellStockedProduct(request);
-    await signIn(page, "customer");
+    await signIn(page, "bagShopper");
     await page.goto(`/products/${product.slug}`);
     await page.getByRole("button", { name: "Increase quantity" }).click();
     await page.getByRole("button", { name: "Add to Bag" }).click();
@@ -39,7 +39,7 @@ test.describe("Bag", () => {
 
   test("mobile opens the bag as a drawer", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await signIn(page, "customer");
+    await signIn(page, "bagShopper");
     await page.goto("/");
     await page.getByRole("button", { name: "Bag" }).click();
     const drawer = page.getByRole("dialog", { name: "Bag" });
