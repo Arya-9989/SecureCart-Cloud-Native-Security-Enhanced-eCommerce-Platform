@@ -6,7 +6,8 @@ from typing import Any, cast
 import django_filters
 from django.conf import settings
 from django.db.models import Count, Prefetch, QuerySet
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -29,7 +30,7 @@ from apps.accounts.permissions import IsAdminRole
 from apps.accounts.throttles import CheckoutRateThrottle
 from apps.audit import services as audit
 from apps.core.exceptions import Conflict
-from apps.orders import checkout, invoice, state
+from apps.orders import checkout, export, invoice, state
 from apps.orders.models import Order, OrderItem, OrderStatus
 from apps.orders.serializers import (
     AdminOrderSerializer,
@@ -234,6 +235,32 @@ class AdminOrderViewSet(
 
     def get_queryset(self) -> QuerySet[Order]:
         return _detail_queryset()
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("status", str, many=True),
+            OpenApiParameter("search", str),
+            OpenApiParameter("created_after", OpenApiTypes.DATETIME),
+            OpenApiParameter("created_before", OpenApiTypes.DATETIME),
+        ],
+        responses={(200, "text/csv"): OpenApiTypes.BINARY},
+        tags=["admin"],
+        summary="Export the filtered orders as CSV (formula-safe)",
+    )
+    @action(detail=False, methods=["get"], url_path="export", pagination_class=None)
+    def export(self, request: Request) -> StreamingHttpResponse:
+        orders = self.filter_queryset(self.get_queryset()).order_by("created_at")
+        audit.record(
+            "admin.orders.exported",
+            request=request,
+            changes={"filters": dict(request.query_params.lists()), "rows": orders.count()},
+        )
+        response = StreamingHttpResponse(
+            export.stream(export.rows(orders)), content_type="text/csv; charset=utf-8"
+        )
+        stamp = timezone.now().strftime("%Y%m%d-%H%M")
+        response["Content-Disposition"] = f'attachment; filename="orders-{stamp}.csv"'
+        return response
 
     @extend_schema(tags=["admin"])
     @_INVOICE_SCHEMA

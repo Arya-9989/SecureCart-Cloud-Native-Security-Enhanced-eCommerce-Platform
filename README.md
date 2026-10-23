@@ -65,7 +65,7 @@ More screenshots: [how your order is protected](docs/screenshots/protection.png)
 **Admin console** (`/admin`, admin role only)
 - Dashboard: revenue and order KPIs, a 30-day revenue chart (with a data-table view), orders by status, top products and low-stock alerts, plus a Ctrl/⌘K command palette.
 - Product and inventory management: create, edit, hide/activate and delete (refused with `409` if the product has order history), with image uploads that are validated, stripped of metadata, re-encoded as WebP and kept in object storage.
-- Order monitoring and fulfilment: filter by status, search, and ship/deliver/cancel through the order state machine.
+- Order monitoring and fulfilment: filter by status, search, and ship/deliver/cancel through the order state machine, plus a CSV export of the filtered orders. Cells a spreadsheet would run as formulas are neutralised, and each export is audited.
 - User and role management: promote or demote admins and suspend accounts (each change revokes that user's sessions).
 - Audit log of admin actions and authentication events, with actor, field-level diff, client IP and request ID.
 
@@ -292,7 +292,7 @@ Interactive documentation is served by the backend at **`/api/docs/`** (Swagger 
 | Payments | `GET /api/payments/config/` (provider, mode, test methods) · `POST /api/payments/webhooks/stripe/` (Stripe-signed) | Public |
 | Orders | `GET /api/orders/` · `GET /api/orders/{id}/` · `POST /api/orders/{id}/cancel/` · `GET /api/orders/{id}/invoice/` (PDF; `409` if unpaid) | Customer (own orders) |
 | Media | `GET /api/media/products/{id}/{key}.webp` (uploaded product images) | Public |
-| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD, `POST {id}/image/` multipart upload) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` with `POST {id}/transition/` and `GET {id}/invoice/` · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
+| Admin | `/api/admin/dashboard/` · `/api/admin/products/` (CRUD, `POST {id}/image/` multipart upload) · `/api/admin/categories/` (CRUD) · `/api/admin/orders/` with `POST {id}/transition/`, `GET {id}/invoice/` and `GET export/` (CSV) · `/api/admin/users/` (list, role/status) · `/api/admin/audit-logs/` | Admin role |
 | System | `GET /api/health/` | Public |
 
 ## Testing

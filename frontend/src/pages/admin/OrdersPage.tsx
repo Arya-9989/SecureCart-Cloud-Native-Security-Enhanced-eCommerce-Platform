@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { useCallback, useState } from "react";
+import { Download } from "lucide-react";
 import { useSearchParams } from "react-router";
 
 import {
@@ -20,8 +21,8 @@ import { ErrorState } from "@/components/ui/EmptyState";
 import { OrderStatusBadge, Pagination, ProductImage } from "@/components/ui/misc";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
-import { errorMessage } from "@/lib/api";
-import { adminApi } from "@/lib/endpoints";
+import { apiDownload, errorMessage, saveBlob } from "@/lib/api";
+import { adminApi, toQuery } from "@/lib/endpoints";
 import { STATUS_LABELS, formatDateTime, formatMoney } from "@/lib/format";
 import type { AdminOrder, OrderStatus } from "@/lib/types";
 
@@ -169,6 +170,32 @@ function OrderDrawer({ orderId, onClose }: { orderId: string | null; onClose: ()
   );
 }
 
+/** Downloads the orders matching the current filters as CSV (formula-safe on the server). */
+function ExportButton({ status, search }: { status: string; search: string }) {
+  const toast = useToast();
+  const download = useMutation({
+    mutationFn: () => apiDownload(`/admin/orders/export/${toQuery({ status, search })}`),
+    onSuccess: ({ blob, filename }) => {
+      saveBlob(blob, filename);
+    },
+    onError: (error) => {
+      toast.error("Couldn't export orders", errorMessage(error));
+    },
+  });
+  return (
+    <Button
+      variant="outline"
+      icon={<Download className="size-4" aria-hidden />}
+      loading={download.isPending}
+      onClick={() => {
+        download.mutate();
+      }}
+    >
+      Export CSV
+    </Button>
+  );
+}
+
 export function AdminOrdersPage() {
   const [params, setParams] = useSearchParams();
   const status = (params.get("status") ?? "") as "" | OrderStatus;
@@ -204,7 +231,11 @@ export function AdminOrdersPage() {
 
   return (
     <>
-      <AdminPageHeader title="Orders" description="Monitor payments and fulfil shipments." />
+      <AdminPageHeader
+        title="Orders"
+        description="Monitor payments and fulfil shipments."
+        actions={<ExportButton status={status} search={search} />}
+      />
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div
           // Filters, not tabs: there are no tab panels and no arrow-key model to honour.
