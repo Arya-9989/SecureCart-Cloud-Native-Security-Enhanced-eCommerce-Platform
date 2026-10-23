@@ -352,13 +352,25 @@ STORAGES = {
 }
 
 LOG_LEVEL = env_str("LOG_LEVEL", "INFO")
+#: "json" (one object per line, with request IDs) or "text". JSON unless DEBUG is on.
+LOG_FORMAT = env_str("LOG_FORMAT", "text" if DEBUG else "json")
+if LOG_FORMAT not in {"json", "text"}:
+    raise ImproperlyConfigured("LOG_FORMAT must be 'json' or 'text'.")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {"request_id": {"()": "apps.core.logging.RequestIDFilter"}},
     "formatters": {
-        "default": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"},
+        "text": {"format": "%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s"},
+        "json": {"()": "apps.core.logging.JsonFormatter"},
     },
-    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "default"}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": LOG_FORMAT,
+            "filters": ["request_id"],
+        }
+    },
     "root": {"handlers": ["console"], "level": LOG_LEVEL},
     "loggers": {
         "django.request": {"level": "WARNING"},

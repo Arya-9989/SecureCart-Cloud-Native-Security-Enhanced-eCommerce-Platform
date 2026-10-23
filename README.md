@@ -261,6 +261,7 @@ All configuration comes from environment variables, and the defaults are the sec
 | `STRIPE_ALLOW_LIVE_MODE` | `false` | Live keys are refused unless this is `true` |
 | `STRIPE_API_BASE` / `STRIPE_TIMEOUT_SECONDS` / `STRIPE_MAX_NETWORK_RETRIES` / `STRIPE_WEBHOOK_TOLERANCE_SECONDS` | `https://api.stripe.com` / `10` / `2` / `300` | Client settings (the base is pointed at stripe-mock in tests) |
 | `STORE_CURRENCY`, `FREE_SHIPPING_THRESHOLD`, `FLAT_SHIPPING_FEE`, `TAX_RATE`, `MAX_CART_LINE_QUANTITY` | `USD`, `75.00`, `6.99`, `0.08`, `10` | Store pricing rules |
+| `LOG_FORMAT` / `LOG_LEVEL` | `json` (`text` with `DJANGO_DEBUG=true`) / `INFO` | One JSON object per log line, each tagged with the request's `X-Request-ID` (the same ID the audit log stores) |
 | `RUN_MIGRATIONS` / `SEED_DEMO` | `true` / `false` (`true` in compose) | Container start-up tasks |
 | `DEMO_ADMIN_PASSWORD` / `DEMO_CUSTOMER_PASSWORD` | see the demo table | Passwords used by `seed_demo` |
 | `VITE_DEMO_MODE` | `true` | Build-time flag for the demo-account shortcuts |

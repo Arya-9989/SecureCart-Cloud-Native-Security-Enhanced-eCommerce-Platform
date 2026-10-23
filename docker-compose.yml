@@ -59,6 +59,7 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_ALLOW_LIVE_MODE: ${STRIPE_ALLOW_LIVE_MODE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
       # Every setting the README documents can be changed from .env (defaults shown).
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       JWT_ACCESS_MINUTES: ${JWT_ACCESS_MINUTES:-10}
@@ -130,6 +131,7 @@ services:
       PENDING_ORDER_TIMEOUT_MINUTES: ${PENDING_ORDER_TIMEOUT_MINUTES:-30}
       SCHEDULER_PENDING_ORDERS_EVERY_SECONDS: ${SCHEDULER_PENDING_ORDERS_EVERY_SECONDS:-300}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
     healthcheck:
       # The loop touches this file every tick (15 s); stale for 2 minutes means it is stuck.
       test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/scheduler-heartbeat') < 120 else 1)"]
