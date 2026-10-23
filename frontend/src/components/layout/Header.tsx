@@ -285,6 +285,11 @@ function AccountMenu() {
               <Package className="size-4 text-muted" aria-hidden /> Orders
             </Link>
           </DropdownMenu.Item>
+          <DropdownMenu.Item asChild className={item}>
+            <Link to="/account">
+              <UserRound className="size-4 text-muted" aria-hidden /> Account
+            </Link>
+          </DropdownMenu.Item>
           {isAdmin && (
             <DropdownMenu.Item asChild className={item}>
               <Link to="/admin">

@@ -3,7 +3,13 @@ from __future__ import annotations
 import hashlib
 from decimal import Decimal
 
-from apps.payments.providers.base import ChargeResult, PaymentProvider, RefundResult
+from apps.payments.providers.base import (
+    ChargeResult,
+    PaymentProvider,
+    PublicConfig,
+    RefundResult,
+    TestMethod,
+)
 
 APPROVE_TOKEN = "tok_mock_approve"  # noqa: S105 - public test token, not a secret
 DECLINE_TOKEN = "tok_mock_decline"  # noqa: S105
@@ -31,5 +37,23 @@ class MockPaymentProvider(PaymentProvider):
             return ChargeResult(False, reference, "Card declined (mock).")
         return ChargeResult(False, reference, "Invalid payment token.")
 
-    def refund(self, *, reference: str, amount: Decimal, currency: str) -> RefundResult:
+    def refund(
+        self, *, reference: str, amount: Decimal, currency: str, idempotency_key: str = ""
+    ) -> RefundResult:
         return RefundResult(True, reference.replace("mock_ch_", "mock_re_", 1))
+
+    def public_config(self) -> PublicConfig:
+        return PublicConfig(
+            provider=self.name,
+            mode="offline",
+            test_methods=[
+                TestMethod(
+                    APPROVE_TOKEN, "Test card: approve", "The mock provider captures the payment."
+                ),
+                TestMethod(
+                    DECLINE_TOKEN,
+                    "Test card: decline",
+                    "Simulates a declined card so you can see stock being released.",
+                ),
+            ],
+        )

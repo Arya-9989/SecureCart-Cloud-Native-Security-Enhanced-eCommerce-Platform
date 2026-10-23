@@ -9,10 +9,12 @@ from apps.accounts.models import Role, User
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
+    email_verified = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "date_joined"]
-        read_only_fields = ["id", "email", "role", "date_joined"]
+        fields = ["id", "email", "full_name", "role", "email_verified", "date_joined"]
+        read_only_fields = ["id", "email", "role", "email_verified", "date_joined"]
 
 
 class RegisterSerializer(serializers.ModelSerializer[User]):
@@ -65,8 +67,30 @@ class ChangePasswordSerializer(serializers.Serializer[None]):
         return attrs
 
 
+class TokenSerializer(serializers.Serializer[None]):
+    token = serializers.CharField(max_length=128, trim_whitespace=True)
+
+
+class ForgotPasswordSerializer(serializers.Serializer[None]):
+    email = serializers.EmailField(max_length=254)
+
+
+class ResetPasswordSerializer(serializers.Serializer[None]):
+    token = serializers.CharField(max_length=128, trim_whitespace=True)
+    new_password = serializers.CharField(trim_whitespace=False, max_length=128)
+
+
+class DeleteAccountSerializer(serializers.Serializer[None]):
+    password = serializers.CharField(trim_whitespace=False, max_length=128)
+
+
+class DetailSerializer(serializers.Serializer[None]):
+    detail = serializers.CharField()
+
+
 class AdminUserSerializer(serializers.ModelSerializer[User]):
     order_count = serializers.IntegerField(read_only=True)
+    email_verified = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -76,6 +100,7 @@ class AdminUserSerializer(serializers.ModelSerializer[User]):
             "full_name",
             "role",
             "is_active",
+            "email_verified",
             "date_joined",
             "last_login",
             "order_count",

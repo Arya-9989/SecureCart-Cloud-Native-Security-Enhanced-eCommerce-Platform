@@ -199,6 +199,8 @@ class TestStoreRulesContract:
         assert rules["accessTokenMinutes"] == Decimal(self._default("JWT_ACCESS_MINUTES"))
         assert rules["refreshTokenDays"] == Decimal(self._default("JWT_REFRESH_DAYS"))
         assert f"{rules['signInAttemptsPerMinute']}/min" == self._default("THROTTLE_AUTH")
+        assert rules["resetLinkMinutes"] == Decimal(self._default("PASSWORD_RESET_TTL_MINUTES"))
+        assert rules["verifyLinkHours"] == Decimal(self._default("EMAIL_VERIFICATION_TTL_HOURS"))
 
 
 class TestPrerenderSnapshotContract:

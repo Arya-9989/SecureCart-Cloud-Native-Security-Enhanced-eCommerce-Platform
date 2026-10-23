@@ -4,7 +4,10 @@ import re
 from typing import Any, cast
 
 import django_filters
+from django.conf import settings
 from django.db.models import Count, Prefetch, QuerySet
+from django.http import HttpResponse, StreamingHttpResponse
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -27,7 +30,7 @@ from apps.accounts.permissions import IsAdminRole
 from apps.accounts.throttles import CheckoutRateThrottle
 from apps.audit import services as audit
 from apps.core.exceptions import Conflict
-from apps.orders import checkout, state
+from apps.orders import checkout, export, invoice, state
 from apps.orders.models import Order, OrderItem, OrderStatus
 from apps.orders.serializers import (
     AdminOrderSerializer,
@@ -46,6 +49,26 @@ def _error(code: str, message: str, http_status: int, **extra: Any) -> Response:
 
 def _detail_queryset() -> QuerySet[Order]:
     return Order.objects.select_related("user").prefetch_related("items", "events")
+
+
+_INVOICE_SCHEMA = extend_schema(
+    responses={
+        (200, "application/pdf"): OpenApiTypes.BINARY,
+        409: OpenApiResponse(description="The order was never paid"),
+    },
+    summary="Download the order's invoice (PDF)",
+)
+
+
+def _invoice_response(order: Order) -> HttpResponse:
+    try:
+        pdf = invoice.render(order)
+    except invoice.InvoiceUnavailable as exc:
+        raise Conflict("Invoices are issued once an order is paid.") from exc
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{invoice.filename(order)}"'
+    response["Content-Length"] = str(len(pdf))
+    return response
 
 
 class CheckoutView(APIView):
@@ -67,16 +90,29 @@ class CheckoutView(APIView):
         responses={
             201: OrderSerializer,
             200: OpenApiResponse(OrderSerializer, description="Idempotent replay"),
+            202: OpenApiResponse(
+                OrderSerializer,
+                description="Payment started; the provider confirms it by webhook "
+                "(order stays pending_payment until then)",
+            ),
             402: OpenApiResponse(
                 description="Payment declined; stock released (also returned when replaying "
                 "a declined attempt's key)"
             ),
+            403: OpenApiResponse(description="Email address not confirmed yet"),
             409: OpenApiResponse(description="Insufficient stock or empty cart"),
         },
         tags=["orders"],
         summary="Place an order from the current cart",
     )
     def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        if settings.REQUIRE_VERIFIED_EMAIL and not user.email_verified:
+            return _error(
+                "email_unverified",
+                "Confirm your email address to place an order. We sent you a link.",
+                status.HTTP_403_FORBIDDEN,
+            )
         key = request.headers.get("Idempotency-Key", "")
         if not _IDEMPOTENCY_KEY_RE.match(key):
             raise ValidationError(
@@ -87,7 +123,7 @@ class CheckoutView(APIView):
         data = serializer.validated_data
         try:
             result = checkout.place_order(
-                cast(User, request.user),
+                user,
                 address=checkout.ShippingAddress(**data["shipping_address"]),
                 payment_token=data["payment_token"],
                 idempotency_key=key,
@@ -108,10 +144,12 @@ class CheckoutView(APIView):
                 order_id=str(result.order.pk),
             )
         order = _detail_queryset().get(pk=result.order.pk)
-        return Response(
-            OrderSerializer(order).data,
-            status=status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED,
-        )
+        if order.status == OrderStatus.PENDING_PAYMENT:
+            # The provider confirms asynchronously (webhook): accepted, not yet paid.
+            code: int = status.HTTP_202_ACCEPTED
+        else:
+            code = status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED
+        return Response(OrderSerializer(order).data, status=code)
 
 
 class OrderFilter(django_filters.FilterSet):
@@ -155,6 +193,13 @@ class OrderViewSet(
     def get_serializer_class(self) -> type[BaseSerializer[Order]]:
         return OrderSummarySerializer if self.action == "list" else OrderSerializer
 
+    @extend_schema(tags=["orders"])
+    @_INVOICE_SCHEMA
+    @action(detail=True, methods=["get"])
+    def invoice(self, request: Request, pk: str | None = None) -> HttpResponse:
+        # get_object() goes through get_queryset(): another customer's order is a 404.
+        return _invoice_response(self.get_object())
+
     @extend_schema(
         request=None,
         responses={200: OrderSerializer, 409: OpenApiResponse(description="Not cancellable")},
@@ -190,6 +235,38 @@ class AdminOrderViewSet(
 
     def get_queryset(self) -> QuerySet[Order]:
         return _detail_queryset()
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("status", str, many=True),
+            OpenApiParameter("search", str),
+            OpenApiParameter("created_after", OpenApiTypes.DATETIME),
+            OpenApiParameter("created_before", OpenApiTypes.DATETIME),
+        ],
+        responses={(200, "text/csv"): OpenApiTypes.BINARY},
+        tags=["admin"],
+        summary="Export the filtered orders as CSV (formula-safe)",
+    )
+    @action(detail=False, methods=["get"], url_path="export", pagination_class=None)
+    def export(self, request: Request) -> StreamingHttpResponse:
+        orders = self.filter_queryset(self.get_queryset()).order_by("created_at")
+        audit.record(
+            "admin.orders.exported",
+            request=request,
+            changes={"filters": dict(request.query_params.lists()), "rows": orders.count()},
+        )
+        response = StreamingHttpResponse(
+            export.stream(export.rows(orders)), content_type="text/csv; charset=utf-8"
+        )
+        stamp = timezone.now().strftime("%Y%m%d-%H%M")
+        response["Content-Disposition"] = f'attachment; filename="orders-{stamp}.csv"'
+        return response
+
+    @extend_schema(tags=["admin"])
+    @_INVOICE_SCHEMA
+    @action(detail=True, methods=["get"], url_path="invoice")
+    def invoice(self, request: Request, pk: str | None = None) -> HttpResponse:
+        return _invoice_response(self.get_object())
 
     @extend_schema(
         request=TransitionSerializer,

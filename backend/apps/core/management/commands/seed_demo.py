@@ -20,6 +20,7 @@ from django.utils.text import slugify
 
 from apps.accounts.models import Role, User
 from apps.cart.models import Cart, CartItem
+from apps.catalog import cache as catalog_cache
 from apps.catalog.demo_data import CATEGORIES, PRODUCTS
 from apps.catalog.models import Category, Product
 from apps.orders import checkout, state
@@ -83,6 +84,7 @@ class Command(BaseCommand):
             # in-stock / low-stock / sold-out states regardless of generated history.
             for spec in PRODUCTS:
                 Product.objects.filter(sku=spec["sku"]).update(stock=spec["stock"])
+                catalog_cache.bump_after_commit()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -121,9 +123,17 @@ class Command(BaseCommand):
     def _user(self, email: str, name: str, role: str, password: str) -> User:
         user = User.objects.filter(email=email).first()
         if user is None:
+            # Demo accounts are pre-confirmed so the store can be explored without an inbox.
             user = User.objects.create_user(
-                email=email, password=password, full_name=name, role=role
+                email=email,
+                password=password,
+                full_name=name,
+                role=role,
+                email_verified_at=timezone.now(),
             )
+        elif user.email_verified_at is None:
+            user.email_verified_at = timezone.now()
+            user.save(update_fields=["email_verified_at"])
         return user
 
     def _orders(

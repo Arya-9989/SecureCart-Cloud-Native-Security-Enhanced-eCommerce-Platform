@@ -32,8 +32,31 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.31.6
+        ports: ["1025:1025", "8025:8025"]
+      stripe-mock:
+        image: stripe/stripe-mock:v0.206.0
+        ports: ["12111:12111"]
+      redis:
+        image: redis:8.8.3-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     env:
       DATABASE_URL: postgres://securecart:securecart@localhost:5432/securecart
+      # Real SMTP delivery tests (tests/test_mailpit.py) run against this Mailpit.
+      MAILPIT_URL: http://localhost:8025
+      MAILPIT_SMTP_PORT: "1025"
+      # Stripe API contract tests (tests/test_stripe.py) run against stripe-mock.
+      STRIPE_MOCK_URL: http://localhost:12111
+      # Atomic rate limits and the catalog cache (tests/test_cache_and_throttling.py).
+      REDIS_URL: redis://localhost:6379/0
+      # Image uploads against real S3 semantics (tests/test_media.py).
+      MINIO_URL: http://localhost:9000
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,6 +67,18 @@ jobs:
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
+      - name: Start MinIO (object storage for image-upload tests)
+        # Service containers cannot pass the "server /data" arguments, so it runs here.
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880 \
+            server /data --address :9000
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && exit 0
+            sleep 1
+          done
+          docker logs minio; exit 1
       - name: Install dependencies
         run: uv sync --frozen
       - name: Ruff lint (backend and repo scripts)
@@ -94,6 +129,12 @@ jobs:
   e2e:
     name: End-to-end (Playwright + axe)
     runs-on: ubuntu-24.04
+    # Chromium and every library it needs are baked into Playwright's own image, matched to
+    # the @playwright/test version in package-lock.json. The old job spent 9 to 12.5 minutes
+    # in `playwright install --with-deps` (apt fetched 20.6 MB at 28.6 kB/s on one run); the
+    # tests themselves take under a minute. Bump this tag together with @playwright/test.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
     services:
       postgres:
         image: postgres:17.11-alpine
@@ -101,18 +142,31 @@ jobs:
           POSTGRES_USER: securecart
           POSTGRES_PASSWORD: securecart
           POSTGRES_DB: securecart
-        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U securecart"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.31.6
     env:
-      DATABASE_URL: postgres://securecart:securecart@localhost:5432/securecart
+      # Inside a job container, services are reached by their names.
+      DATABASE_URL: postgres://securecart:securecart@postgres:5432/securecart
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
       # The specs sign in many times within a minute; production keeps 10/min.
       THROTTLE_AUTH: 120/min
       THROTTLE_CHECKOUT: 120/min
+      # Account emails go to Mailpit, whose API the account-recovery spec reads.
+      EMAIL_BACKEND: smtp
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+      EMAIL_USE_TLS: "false"
+      APP_BASE_URL: http://localhost:4173
+      MAILPIT_URL: http://mailpit:8025
+      # Product images stay in the API process here (one gunicorn worker, so uploads and
+      # reads share it); S3 itself is exercised against MinIO by the backend job.
+      MEDIA_STORAGE: memory
+      E2E_MEDIA: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -128,8 +182,9 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # The Playwright image has neither curl nor openssl: Node does both jobs here.
       - name: Generate a throwaway secret key
-        run: echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
+        run: echo "DJANGO_SECRET_KEY=$(node -p "require('crypto').randomBytes(48).toString('base64')")" >> "$GITHUB_ENV"
       - name: Migrate and seed the demo store
         working-directory: backend
         run: |
@@ -139,19 +194,17 @@ jobs:
       - name: Start the API (gunicorn, DEBUG off, Secure refresh cookie)
         working-directory: backend
         run: |
-          nohup uv run gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2 \
-            > "$RUNNER_TEMP/api.log" 2>&1 &
+          nohup uv run gunicorn config.wsgi:application --bind 127.0.0.1:8000 \
+            --workers 1 --threads 4 > "$RUNNER_TEMP/api.log" 2>&1 &
           for _ in $(seq 1 30); do
-            curl -fsS http://127.0.0.1:8000/api/health/ && exit 0
+            node -e "fetch('http://127.0.0.1:8000/api/health/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" && exit 0
             sleep 1
           done
           cat "$RUNNER_TEMP/api.log"
           exit 1
-      - name: Install frontend dependencies and Chromium
+      - name: Install frontend dependencies (browsers come with the image)
         working-directory: frontend
-        run: |
-          npm ci --no-audit --no-fund
-          npx playwright install --with-deps chromium
+        run: npm ci --no-audit --no-fund
       - name: Build the SPA
         working-directory: frontend
         run: npm run build
@@ -171,6 +224,120 @@ jobs:
             ${{ runner.temp }}/api.log
           retention-days: 7
 
+  image-scan:
+    name: Image scan (Trivy + hadolint)
+    runs-on: ubuntu-24.04
+    env:
+      TRIVY_VERSION: "0.76.1"
+      # SHA-256 of trivy_0.76.1_Linux-64bit.tar.gz from the release's checksums file, whose
+      # Sigstore signature was verified first (docs/adr/0001-container-image-scanning.md).
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
+      TRIVY_DB_REPOSITORY: mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2
+      HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint Dockerfiles (hadolint)
+        run: |
+          set -euo pipefail
+          for dockerfile in backend/Dockerfile frontend/Dockerfile; do
+            echo "::group::$dockerfile"
+            docker run --rm -i "$HADOLINT_IMAGE" hadolint --failure-threshold warning - < "$dockerfile"
+            echo "::endgroup::"
+          done
+      - name: Install Trivy (checksum-verified release)
+        run: |
+          set -euo pipefail
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSLo "$RUNNER_TEMP/$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" trivy
+          sudo install -m 0755 "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
+          trivy --version
+      - name: Date for the database cache key
+        id: day
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - name: Restore the vulnerability database
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .trivy-cache
+          # One database per day: fresh enough for new advisories, cheap to restore.
+          key: trivy-db-${{ steps.day.outputs.day }}
+          restore-keys: trivy-db-
+      - name: Build the images we ship
+        env:
+          DJANGO_SECRET_KEY: build-only
+          POSTGRES_PASSWORD: build-only
+          REDIS_PASSWORD: build-only
+          MINIO_ROOT_PASSWORD: build-only
+        run: docker compose build
+      - name: Scan shipped images (fail on fixable HIGH/CRITICAL)
+        run: scripts/scan_images.sh gate
+      - name: Scan local-only emulators (report only, never deployed)
+        if: always()
+        run: scripts/scan_images.sh report
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-reports
+          path: trivy-reports/
+          retention-days: 14
+
+  k8s-manifests:
+    name: Kubernetes manifests (kustomize, kubeconform, Trivy config)
+    runs-on: ubuntu-24.04
+    env:
+      KUSTOMIZE_VERSION: "5.8.3"
+      KUSTOMIZE_SHA256: cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61
+      KUBECONFORM_VERSION: "0.8.0"
+      KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      TRIVY_VERSION: "0.76.1"
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      # CRD schemas for cert-manager's ClusterIssuer, pinned to a commit of the catalog.
+      CRDS_CATALOG: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install kustomize, kubeconform and Trivy (checksum-verified releases)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLo kustomize.tgz "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          echo "${KUSTOMIZE_SHA256}  kustomize.tgz" | sha256sum --check --strict
+          curl -fsSLo kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tgz" | sha256sum --check --strict
+          curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum --check --strict
+          tar -xzf kustomize.tgz kustomize
+          tar -xzf kubeconform.tgz kubeconform
+          tar -xzf trivy.tgz trivy
+          sudo install -m 0755 kustomize kubeconform trivy /usr/local/bin/
+      - name: Render every overlay
+        run: |
+          set -euo pipefail
+          mkdir -p rendered
+          # The kind overlay reads a generated secrets file; placeholders are enough to render.
+          printf '%s\n' DJANGO_SECRET_KEY=ci POSTGRES_PASSWORD=ci REDIS_PASSWORD=ci \
+            MEDIA_S3_ACCESS_KEY=ci MEDIA_S3_SECRET_KEY=ci > deploy/k8s/overlays/kind/secrets.env
+          for overlay in kind production; do
+            kustomize build "deploy/k8s/overlays/$overlay" > "rendered/$overlay.yaml"
+          done
+      - name: kubeconform (strict, Kubernetes 1.37)
+        run: |
+          for overlay in kind production; do
+            kubeconform -strict -summary -kubernetes-version 1.37.0 \
+              -schema-location default \
+              -schema-location "${CRDS_CATALOG}/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+              "rendered/$overlay.yaml"
+          done
+      - name: Trivy misconfiguration scan (fail on HIGH/CRITICAL)
+        run: trivy config --exit-code 1 --severity HIGH,CRITICAL rendered/
+
   docker:
     name: Docker images + compose smoke test
     runs-on: ubuntu-24.04
@@ -184,6 +351,8 @@ jobs:
           {
             echo "DJANGO_SECRET_KEY=$(openssl rand -base64 48)"
             echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "REDIS_PASSWORD=$(openssl rand -hex 24)"
+            echo "MINIO_ROOT_PASSWORD=$(openssl rand -hex 24)"
           } > .env
       - name: Build images
         run: docker compose build
@@ -193,11 +362,24 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS http://localhost:8080/healthz
-          curl -fsS http://localhost:8080/api/health/ | grep -q '"ok"'
+          curl -fsS http://localhost:8080/api/health/ | grep -q '"redis":"ok"'
+          # The catalog is served from Redis on the second read.
+          curl -fsS -o /dev/null "http://localhost:8080/api/products/?search=lamp"
+          curl -fsS -D - -o /dev/null "http://localhost:8080/api/products/?search=lamp" | grep -qi "x-cache: HIT"
+          # The scheduler has run its jobs at least once.
+          docker compose exec -T scheduler test -f /tmp/scheduler-heartbeat
           curl -fsS "http://localhost:8080/api/products/?search=lamp" | grep -q "Halo Table Lamp"
           curl -fsSI http://localhost:8080/ | grep -qi "content-security-policy"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/admin/dashboard/)" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/products/halo-table-lamp)" = "200"
+          # Account email leaves the API over SMTP and lands in Mailpit.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"email":"maya@example.com"}' http://localhost:8080/api/auth/password/forgot/)" = "202"
+          for _ in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:8025/api/v1/messages | grep -q "Reset your SecureCart password" && exit 0
+            sleep 1
+          done
+          echo "reset email never reached Mailpit"; exit 1
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color

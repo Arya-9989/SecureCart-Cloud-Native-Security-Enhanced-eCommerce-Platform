@@ -1,0 +1,67 @@
+# Periodic jobs. One replica is enough; more are safe (database leases, ADR 0004).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: scheduler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scheduler
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: securecart
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: scheduler
+          image: securecart-backend
+          imagePullPolicy: IfNotPresent
+          args: ["python", "manage.py", "run_scheduler"]
+          envFrom:
+            - configMapRef:
+                name: securecart-config
+            - secretRef:
+                name: securecart-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 20m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          # The loop touches a heartbeat file every tick (15 s).
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/scheduler-heartbeat') < 120 else 1)
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      # SIGTERM stops the loop between jobs.
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi

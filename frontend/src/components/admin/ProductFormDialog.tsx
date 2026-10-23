@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 
+import { ProductImageField } from "@/components/admin/ProductImageField";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
@@ -57,7 +58,7 @@ export function ProductFormDialog({
     queryFn: adminApi.categories,
     enabled: open,
   });
-  const { register, handleSubmit, reset, setError, formState } = useForm<
+  const { register, handleSubmit, reset, setError, setValue, watch, formState } = useForm<
     FormInput,
     unknown,
     FormOutput
@@ -159,6 +160,13 @@ export function ProductFormDialog({
             min={0}
             error={formState.errors.stock?.message}
             {...register("stock")}
+          />
+          <ProductImageField
+            product={product}
+            imageUrl={watch("image_url")}
+            onUploaded={(url) => {
+              setValue("image_url", url, { shouldDirty: true });
+            }}
           />
           <TextField
             label="Image URL"

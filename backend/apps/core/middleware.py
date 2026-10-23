@@ -9,6 +9,8 @@ from collections.abc import Callable
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 
+from apps.core.logging import request_id_var
+
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9\-]{8,64}$")
 
 
@@ -46,6 +48,10 @@ class RequestIDMiddleware:
         incoming = request.headers.get(self.header, "")
         request_id = incoming if _REQUEST_ID_RE.match(incoming) else uuid.uuid4().hex
         request.META["REQUEST_ID"] = request_id
-        response = self.get_response(request)
+        token = request_id_var.set(request_id)  # tags every log line of this request
+        try:
+            response = self.get_response(request)
+        finally:
+            request_id_var.reset(token)
         response.headers[self.header] = request_id
         return response

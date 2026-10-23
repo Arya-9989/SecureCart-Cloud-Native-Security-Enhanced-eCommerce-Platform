@@ -8,7 +8,21 @@ export interface User {
   email: string;
   full_name: string;
   role: Role;
+  email_verified: boolean;
   date_joined: string;
+}
+
+export interface PaymentMethodOption {
+  token: string;
+  label: string;
+  description: string;
+}
+
+export interface PaymentConfig {
+  provider: string;
+  mode: "offline" | "test" | "live";
+  confirms_asynchronously: boolean;
+  test_methods: PaymentMethodOption[];
 }
 
 export interface TokenResponse {

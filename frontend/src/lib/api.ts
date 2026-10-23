@@ -127,6 +127,8 @@ export function refreshSession(): Promise<User | null> {
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
+  /** Multipart body (file uploads); the browser sets its own Content-Type boundary. */
+  form?: FormData;
   headers?: Record<string, string>;
   signal?: AbortSignal;
   /** Skip the refresh-and-retry dance (used by the auth endpoints themselves). */
@@ -148,6 +150,40 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return parse<T>(response);
 }
 
+/**
+ * Fetch a binary resource (an invoice PDF) with the in-memory access token, refreshing it
+ * once if it expired. Bearer auth means a plain link cannot do this.
+ */
+export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string }> {
+  const hadToken = accessToken !== null;
+  let response = await send(path, {});
+  if (response.status === 401 && hadToken) {
+    const user = await refreshSession();
+    emit(user);
+    if (user) response = await send(path, {});
+  }
+  if (!response.ok) await parse(response); // throws the API's error envelope
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "download";
+  return { blob: await response.blob(), filename };
+}
+
+/** Hand a blob to the browser as a file download. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoke after the click has been handled, not synchronously (Safari drops the download).
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
 function send(path: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
@@ -155,7 +191,7 @@ function send(path: string, options: RequestOptions): Promise<Response> {
   return fetch(`${BASE}/api${path}`, {
     method: options.method ?? "GET",
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.form ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     credentials: "same-origin",
     signal: options.signal,
   });

@@ -2,7 +2,9 @@ name: securecart
 
 # Production-shaped local stack: PostgreSQL, Django API (gunicorn) and the SPA served by
 # nginx, which also reverse-proxies /api so the browser only ever talks to one origin.
+# Mailpit stands in for a real SMTP relay and catches every email locally.
 # Usage: cp .env.example .env && docker compose up --build  ->  http://localhost:8080
+#        Caught email (verification and reset links): http://localhost:8025
 
 x-hardening: &hardening
   read_only: true
@@ -32,6 +34,7 @@ services:
 
   backend:
     <<: *hardening
+    image: securecart-backend:local
     build:
       context: ./backend
     environment:
@@ -39,7 +42,10 @@ services:
       DJANGO_DEBUG: "false"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080}
-      DJANGO_CACHE_BACKEND: db
+      # Throttle windows and the catalog cache live in Redis, shared by every worker/replica.
+      DJANGO_CACHE_BACKEND: redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}@redis:6379/0
+      CATALOG_CACHE_SECONDS: ${CATALOG_CACHE_SECONDS:-300}
       DATABASE_URL: postgres://${POSTGRES_USER:-securecart}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-securecart}
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
@@ -48,7 +54,12 @@ services:
       DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
       DEMO_CUSTOMER_PASSWORD: ${DEMO_CUSTOMER_PASSWORD:-}
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-apps.payments.providers.mock.MockPaymentProvider}
+      # Stripe test mode (only read when PAYMENT_PROVIDER is the Stripe provider; ADR 0003).
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_ALLOW_LIVE_MODE: ${STRIPE_ALLOW_LIVE_MODE:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
       # Every setting the README documents can be changed from .env (defaults shown).
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       JWT_ACCESS_MINUTES: ${JWT_ACCESS_MINUTES:-10}
@@ -66,14 +77,142 @@ services:
       FLAT_SHIPPING_FEE: ${FLAT_SHIPPING_FEE:-6.99}
       TAX_RATE: ${TAX_RATE:-0.08}
       MAX_CART_LINE_QUANTITY: ${MAX_CART_LINE_QUANTITY:-10}
+      # Email: Mailpit by default; point these at a real relay for a deployment.
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      EMAIL_BACKEND: smtp
+      EMAIL_HOST: ${EMAIL_HOST:-mailpit}
+      EMAIL_PORT: ${EMAIL_PORT:-1025}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-false}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL:-false}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-SecureCart <no-reply@securecart.dev>}
+      EMAIL_VERIFICATION_TTL_HOURS: ${EMAIL_VERIFICATION_TTL_HOURS:-24}
+      PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-30}
+      REQUIRE_VERIFIED_EMAIL: ${REQUIRE_VERIFIED_EMAIL:-true}
+      THROTTLE_ACCOUNT_EMAIL: ${THROTTLE_ACCOUNT_EMAIL:-5/min}
+      THROTTLE_ACCOUNT_EMAIL_RECIPIENT: ${THROTTLE_ACCOUNT_EMAIL_RECIPIENT:-3/hour}
+      # Product images: a private MinIO bucket, served through the API (apps.catalog.media).
+      MEDIA_STORAGE: s3
+      MEDIA_S3_ENDPOINT: http://minio:9000
+      MEDIA_S3_BUCKET: ${MEDIA_S3_BUCKET:-securecart-media}
+      MEDIA_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-securecart}
+      MEDIA_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      MAX_IMAGE_UPLOAD_BYTES: ${MAX_IMAGE_UPLOAD_BYTES:-5242880}
     tmpfs:
       - /tmp
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # Periodic jobs (settle unpaid orders, purge expired tokens). Safe to scale: each job runs
+  # once per interval across all instances (database lease, apps.core.scheduler).
+  scheduler:
+    <<: *hardening
+    image: securecart-backend:local  # same image as the API, built once by that service
+    pull_policy: never
+    command: ["python", "manage.py", "run_scheduler"]
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+      DJANGO_DEBUG: "false"
+      DATABASE_URL: postgres://${POSTGRES_USER:-securecart}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-securecart}
+      DJANGO_CACHE_BACKEND: redis
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      RUN_MIGRATIONS: "false"
+      SEED_DEMO: "false"
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-apps.payments.providers.mock.MockPaymentProvider}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_ALLOW_LIVE_MODE: ${STRIPE_ALLOW_LIVE_MODE:-false}
+      PENDING_ORDER_TIMEOUT_MINUTES: ${PENDING_ORDER_TIMEOUT_MINUTES:-30}
+      SCHEDULER_PENDING_ORDERS_EVERY_SECONDS: ${SCHEDULER_PENDING_ORDERS_EVERY_SECONDS:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    healthcheck:
+      # The loop touches this file every tick (15 s); stale for 2 minutes means it is stuck.
+      test: ["CMD", "python", "-c", "import os, sys, time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/scheduler-heartbeat') < 120 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    tmpfs:
+      - /tmp
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Cache only: no persistence, bounded memory, least-recently-used eviction.
+  redis:
+    <<: *hardening
+    image: redis:8.8.3-alpine
+    user: "999:1000"
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - allkeys-lru
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /data
+
+  # S3-compatible object storage for product images (local stand-in for S3). MinIO stopped
+  # publishing images in 2025; this is Chainguard's build, pinned by digest and cosign-verified.
+  minio:
+    <<: *hardening
+    image: cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880
+    command: ["server", "/data", "--address", ":9000"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-securecart}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      MINIO_BROWSER: "off"
+    volumes:
+      - media:/data
+    healthcheck:
+      # The image has no curl; its bundled mc client asks the server's health API instead.
+      test: ["CMD-SHELL", "MC_CONFIG_DIR=/tmp/.mc MC_HOST_local=\"http://$${MINIO_ROOT_USER}:$${MINIO_ROOT_PASSWORD}@127.0.0.1:9000\" mc ready local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    tmpfs:
+      - /tmp
+
+  # Local SMTP sink with a web inbox. Never deployed: real deployments set EMAIL_HOST.
+  mailpit:
+    <<: *hardening
+    image: axllent/mailpit:v1.31.6
+    environment:
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    tmpfs:
+      - /tmp
+      - /data
 
   frontend:
     <<: *hardening
+    image: securecart-frontend:local
     build:
       context: ./frontend
       args:
@@ -88,3 +227,4 @@ services:
 
 volumes:
   pgdata:
+  media:

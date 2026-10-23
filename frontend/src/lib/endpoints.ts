@@ -11,6 +11,7 @@ import type {
   OrderStatus,
   OrderSummary,
   Paginated,
+  PaymentConfig,
   Product,
   ShippingAddress,
   TokenResponse,
@@ -42,6 +43,36 @@ export const authApi = {
   logout: () =>
     apiFetch<undefined>("/auth/logout/", { method: "POST", headers: CSRF, noRetry: true }),
   me: () => apiFetch<User>("/auth/me/"),
+  forgotPassword: (email: string) =>
+    apiFetch<{ detail: string }>("/auth/password/forgot/", {
+      method: "POST",
+      body: { email },
+      noRetry: true,
+    }),
+  resetPassword: (token: string, newPassword: string) =>
+    apiFetch<{ detail: string }>("/auth/password/reset/", {
+      method: "POST",
+      body: { token, new_password: newPassword },
+      noRetry: true,
+    }),
+  verifyEmail: (token: string) =>
+    apiFetch<{ detail: string }>("/auth/email/verify/", {
+      method: "POST",
+      body: { token },
+      noRetry: true,
+    }),
+  updateProfile: (full_name: string) =>
+    apiFetch<User>("/auth/me/", { method: "PATCH", body: { full_name } }),
+  changePassword: (current_password: string, new_password: string) =>
+    apiFetch<TokenResponse>("/auth/password/", {
+      method: "POST",
+      body: { current_password, new_password },
+      noRetry: true,
+    }),
+  revokeSessions: () => apiFetch<undefined>("/auth/sessions/revoke/", { method: "POST" }),
+  deleteAccount: (password: string) =>
+    apiFetch<undefined>("/auth/me/delete/", { method: "POST", body: { password }, noRetry: true }),
+  resendVerification: () => apiFetch<{ detail: string }>("/auth/email/resend/", { method: "POST" }),
 };
 
 export interface ProductQuery extends Query {
@@ -79,6 +110,10 @@ export const cartApi = {
   remove: (itemId: number) => apiFetch<Cart>(`/cart/items/${itemId}/`, { method: "DELETE" }),
 };
 
+export const paymentsApi = {
+  config: () => apiFetch<PaymentConfig>("/payments/config/"),
+};
+
 export const orderApi = {
   checkout: (body: { shipping_address: ShippingAddress; payment_token: string }, key: string) =>
     apiFetch<Order>("/checkout/", {
@@ -112,6 +147,11 @@ export const adminApi = {
     apiFetch<AdminProduct>("/admin/products/", { method: "POST", body }),
   updateProduct: (id: number, body: Partial<ProductInput>) =>
     apiFetch<AdminProduct>(`/admin/products/${id}/`, { method: "PATCH", body }),
+  uploadProductImage: (id: number, file: File) => {
+    const form = new FormData();
+    form.append("image", file);
+    return apiFetch<AdminProduct>(`/admin/products/${id}/image/`, { method: "POST", form });
+  },
   deleteProduct: (id: number) =>
     apiFetch<undefined>(`/admin/products/${id}/`, { method: "DELETE" }),
   categories: () => apiFetch<Category[]>("/admin/categories/"),

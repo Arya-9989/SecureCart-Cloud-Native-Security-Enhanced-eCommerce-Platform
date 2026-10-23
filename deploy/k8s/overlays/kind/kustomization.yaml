@@ -1,0 +1,64 @@
+# Local kind cluster: the application plus in-cluster data services, a self-signed
+# certificate and demo data. Bring it up with deploy/k8s/scripts/kind-up.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: securecart
+resources:
+  - ../../base
+  - datastores.yaml
+  - seed-job.yaml
+# Locally built images, loaded into the kind node by kind-up.sh (applies to the seed Job too).
+images:
+  - name: securecart-backend
+    newName: securecart-backend
+    newTag: local
+  - name: securecart-frontend
+    newName: securecart-frontend
+    newTag: local
+# secrets.env is generated (random values) by kind-up.sh and never committed.
+secretGenerator:
+  - name: securecart-secrets
+    envs:
+      - secrets.env
+generatorOptions:
+  disableNameSuffixHash: true
+patches:
+  - target:
+      kind: ConfigMap
+      name: securecart-config
+    patch: |-
+      - op: replace
+        path: /data/DJANGO_ALLOWED_HOSTS
+        value: securecart.localtest.me,backend
+      - op: replace
+        path: /data/DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://securecart.localtest.me:5403
+      - op: replace
+        path: /data/APP_BASE_URL
+        value: https://securecart.localtest.me:5403
+      # No HSTS for a throwaway self-signed host.
+      - op: replace
+        path: /data/DJANGO_HSTS_SECONDS
+        value: "0"
+      - op: replace
+        path: /data/EMAIL_PORT
+        value: "1025"
+      - op: add
+        path: /data/EMAIL_HOST
+        value: mailpit
+      - op: add
+        path: /data/EMAIL_USE_TLS
+        value: "false"
+      - op: add
+        path: /data/MEDIA_S3_ENDPOINT
+        value: http://minio:9000
+  - target:
+      kind: Ingress
+      name: securecart
+    patch: |-
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: securecart.localtest.me
+      - op: replace
+        path: /spec/rules/0/host
+        value: securecart.localtest.me

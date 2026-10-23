@@ -1,9 +1,20 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, CircleCheck, EyeOff, History, Lock, PackageX, RotateCcw } from "lucide-react";
+import {
+  ChevronLeft,
+  CircleCheck,
+  Clock,
+  EyeOff,
+  History,
+  Loader2,
+  Lock,
+  PackageX,
+  RotateCcw,
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { OrderHistoryList, OrderProgress } from "@/components/store/OrderTimeline";
+import { InvoiceButton } from "@/components/store/InvoiceButton";
 import { PriceSummary } from "@/components/store/PriceSummary";
 import { Button } from "@/components/ui/Button";
 import { buttonClasses } from "@/components/ui/buttonClasses";
@@ -11,7 +22,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState, ErrorState } from "@/components/ui/EmptyState";
 import { OrderStatusBadge, ProductImage, Skeleton } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/Toast";
-import { keys, useOrder } from "@/hooks/queries";
+import { keys, PENDING_POLL_LIMIT, useOrder } from "@/hooks/queries";
 import { ApiError, errorMessage } from "@/lib/api";
 import { orderApi } from "@/lib/endpoints";
 import { formatDateTime, formatMoney } from "@/lib/format";
@@ -42,6 +53,38 @@ const RECEIPT = [
   },
 ];
 
+function providerName(provider: string): string {
+  return provider === "stripe" ? "Stripe (test mode)" : "the mock provider";
+}
+
+/** Shown while an asynchronous provider (Stripe) has not reported the outcome yet. */
+function Confirming({ order, stalled }: { order: Order; stalled: boolean }) {
+  return (
+    <section
+      role="status"
+      aria-labelledby="confirming-heading"
+      className="rounded-[22px] bg-surface-2 px-6 py-10 text-center"
+    >
+      {stalled ? (
+        <Clock className="mx-auto size-10 text-muted" strokeWidth={1.5} aria-hidden />
+      ) : (
+        <Loader2 className="mx-auto size-10 animate-spin text-brand" aria-hidden />
+      )}
+      <h1 id="confirming-heading" className="type-headline mt-5">
+        {stalled ? "Still confirming your payment." : "Confirming your payment."}
+      </h1>
+      <p className="mx-auto mt-3 max-w-[560px] text-[17px] text-pretty text-muted">
+        {providerName(order.payment_provider)} is confirming the charge for order{" "}
+        <span className="font-mono font-medium text-fg">{order.number}</span>. Your items are
+        reserved meanwhile.{" "}
+        {stalled
+          ? "This is taking longer than usual. You can leave this page: the order updates on its own, and if the payment doesn't go through the reservation is released."
+          : "This page updates by itself."}
+      </p>
+    </section>
+  );
+}
+
 function Confirmation({ order }: { order: Order }) {
   return (
     <section role="status" aria-labelledby="confirmed-heading" className="text-center">
@@ -51,7 +94,7 @@ function Confirmation({ order }: { order: Order }) {
       </h1>
       <p className="mt-3 text-[17px] text-muted">
         Order <span className="font-mono font-medium text-fg">{order.number}</span> · payment
-        captured by the mock provider. This page updates as your order ships.
+        captured by {providerName(order.payment_provider)}. This page updates as your order ships.
       </p>
       <div className="mx-auto mt-10 grid max-w-[880px] gap-3 text-left sm:grid-cols-2">
         {RECEIPT.map(({ icon: Icon, title, text }) => (
@@ -72,8 +115,12 @@ export function OrderDetailPage() {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
   const justPlaced = params.get("placed") === "1";
-  const { data: order, isLoading, error, refetch } = useOrder(id);
+  // dataUpdatedAt is read so that every poll re-renders, even when the order is unchanged.
+  const { data: order, isLoading, error, refetch, dataUpdatedAt } = useOrder(id);
   const queryClient = useQueryClient();
+  const updates = dataUpdatedAt
+    ? (queryClient.getQueryState(keys.order(id))?.dataUpdateCount ?? 0)
+    : 0;
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
   useDocumentTitle(order ? `Order ${order.number}` : error ? "Order not found" : undefined);
@@ -129,11 +176,14 @@ export function OrderDetailPage() {
 
   const address = order.shipping_address;
   const confirmed = justPlaced && order.status === "paid";
+  const awaitingPayment = justPlaced && order.status === "pending_payment";
 
   return (
     <div className="container-text pt-10 pb-24 sm:pt-14">
       {confirmed ? (
         <Confirmation order={order} />
+      ) : awaitingPayment ? (
+        <Confirming order={order} stalled={updates >= PENDING_POLL_LIMIT} />
       ) : (
         <Link
           to="/orders"
@@ -143,7 +193,7 @@ export function OrderDetailPage() {
         </Link>
       )}
 
-      <div className={confirmed ? "mt-16 border-t border-line pt-12" : "mt-6"}>
+      <div className={confirmed || awaitingPayment ? "mt-16 border-t border-line pt-12" : "mt-6"}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -160,15 +210,22 @@ export function OrderDetailPage() {
             </div>
             <p className="mt-1 text-[15px] text-muted">Placed {formatDateTime(order.created_at)}</p>
           </div>
-          {order.can_cancel && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setConfirming(true);
-              }}
-            >
-              Cancel order
-            </Button>
+          {(order.paid_at ?? order.can_cancel) && (
+            <div className="flex flex-wrap gap-3">
+              {order.paid_at && (
+                <InvoiceButton path={`/orders/${encodeURIComponent(order.id)}/invoice/`} />
+              )}
+              {order.can_cancel && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setConfirming(true);
+                  }}
+                >
+                  Cancel order
+                </Button>
+              )}
+            </div>
           )}
         </div>
 

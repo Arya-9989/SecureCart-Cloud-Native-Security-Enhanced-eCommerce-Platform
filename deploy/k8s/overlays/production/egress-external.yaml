@@ -1,0 +1,30 @@
+# Managed services live outside the cluster. Egress is opened only on the ports the
+# application uses, and never to private address space, so a compromised pod cannot reach
+# other workloads or the cloud metadata service (169.254.169.254). Narrow the ipBlocks to
+# your providers' ranges where they are published.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-to-managed-services
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["backend", "scheduler", "migrate"]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - { protocol: TCP, port: 5432 } # managed PostgreSQL
+        - { protocol: TCP, port: 6379 } # managed Redis (TLS on 6380 if your provider uses it)
+        - { protocol: TCP, port: 6380 }
+        - { protocol: TCP, port: 443 } # S3 and the Stripe API
+        - { protocol: TCP, port: 587 } # SMTP submission (STARTTLS)

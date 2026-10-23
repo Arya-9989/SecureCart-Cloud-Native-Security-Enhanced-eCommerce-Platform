@@ -46,6 +46,8 @@ class Order(models.Model):
     subtotal = models.DecimalField(max_digits=12, decimal_places=2)
     shipping = models.DecimalField(max_digits=12, decimal_places=2)
     tax = models.DecimalField(max_digits=12, decimal_places=2)
+    #: The rate applied at checkout (null for orders placed before it was recorded).
+    tax_rate = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
     total = models.DecimalField(max_digits=12, decimal_places=2)
 
     shipping_name = models.CharField(max_length=120)

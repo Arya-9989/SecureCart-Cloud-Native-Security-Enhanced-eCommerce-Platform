@@ -32,6 +32,8 @@ export const PROTECTIONS: Protection[] = [
       `Access tokens expire after ${R.accessTokenMinutes} minutes and live only in memory.`,
       "Each refresh rotates the token. Replaying a used one revokes every session on the account.",
       `Sign-in, registration and password changes are limited to ${R.signInAttemptsPerMinute} attempts a minute per IP address, and a wrong email or password gets the same answer.`,
+      `Password reset links work once, expire after ${R.resetLinkMinutes} minutes and are stored only as a hash. Asking for one gives the same answer whether or not the address has an account.`,
+      "Choosing a new password signs you out on every device at once, including sessions that are still open.",
     ],
     source: "backend/apps/accounts",
   },

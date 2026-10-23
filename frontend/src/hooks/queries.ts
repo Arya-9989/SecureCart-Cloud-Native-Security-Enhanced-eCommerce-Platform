@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "@/auth/useAuth";
 import { useToast } from "@/components/ui/Toast";
 import { errorMessage } from "@/lib/api";
-import { cartApi, catalogApi, orderApi, type ProductQuery } from "@/lib/endpoints";
+import { cartApi, catalogApi, orderApi, paymentsApi, type ProductQuery } from "@/lib/endpoints";
 import { announceBagAdd } from "@/lib/bagCue";
 import type { Cart, Product } from "@/lib/types";
 import { isUnconfirmed } from "@/prerender/snapshot";
@@ -16,7 +16,17 @@ export const keys = {
   cart: ["cart"] as const,
   orders: (page: number) => ["orders", page] as const,
   order: (id: string) => ["order", id] as const,
+  paymentConfig: ["catalog", "payment-config"] as const,
 };
+
+/** The payment provider and its test methods; fixed for the life of a deployment. */
+export function usePaymentConfig() {
+  return useQuery({
+    queryKey: keys.paymentConfig,
+    queryFn: paymentsApi.config,
+    staleTime: Infinity,
+  });
+}
 
 export function useCategories() {
   return useQuery({
@@ -100,7 +110,7 @@ export function useAddToCart() {
         { product, quantity },
         {
           onSuccess: () => {
-            toast.success("Added to bag", `${quantity} × ${product.name}`);
+            toast.success("Added to bag", `${quantity} Ã— ${product.name}`);
             announceBagAdd();
             options.onAdded?.();
           },
@@ -128,6 +138,19 @@ export function useOrders(page: number) {
   });
 }
 
+/** Orders awaiting an asynchronous payment confirmation are re-read until they settle. */
+export const PENDING_POLL_MS = 2000;
+/** About three minutes; after that the page says so and offers a manual refresh. */
+export const PENDING_POLL_LIMIT = 90;
+
 export function useOrder(id: string) {
-  return useQuery({ queryKey: keys.order(id), queryFn: () => orderApi.get(id) });
+  return useQuery({
+    queryKey: keys.order(id),
+    queryFn: () => orderApi.get(id),
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending_payment" &&
+      query.state.dataUpdateCount < PENDING_POLL_LIMIT
+        ? PENDING_POLL_MS
+        : false,
+  });
 }
