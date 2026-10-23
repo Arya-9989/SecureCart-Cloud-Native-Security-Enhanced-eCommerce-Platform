@@ -29,6 +29,8 @@ emulators='^(axllent/mailpit|cgr.dev/chainguard/minio|minio/minio|stripe/stripe-
 # `compose config` refuses to render without the required secrets; scanning needs none.
 images="$(DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY:-scan-only}" \
   POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-scan-only}" \
+  REDIS_PASSWORD="${REDIS_PASSWORD:-scan-only}" \
+  MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-scan-only}" \
   docker compose config --images | sort -u)"
 
 selected=()
