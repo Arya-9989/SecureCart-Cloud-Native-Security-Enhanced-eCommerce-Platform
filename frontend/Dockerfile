@@ -16,6 +16,10 @@ RUN find dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' -o -name
 
 # ---- serve with unprivileged nginx (runs as uid 101, listens on 8080) -----------------
 FROM nginxinc/nginx-unprivileged:1.30.6-alpine3.24 AS runtime
+# Apply distro security fixes, then restore the unprivileged nginx user.
+USER 0
+RUN apk upgrade --no-cache
+USER 101
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html

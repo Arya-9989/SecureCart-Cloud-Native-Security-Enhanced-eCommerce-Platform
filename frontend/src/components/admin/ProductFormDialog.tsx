@@ -7,6 +7,7 @@ import type { z } from "zod";
 import { ProductImageField } from "@/components/admin/ProductImageField";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/Field";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
@@ -53,7 +54,11 @@ export function ProductFormDialog({
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data: categories } = useQuery({
+  const {
+    data: categories,
+    error: categoriesError,
+    refetch: refetchCategories,
+  } = useQuery({
     queryKey: ["admin", "categories"],
     queryFn: adminApi.categories,
     enabled: open,
@@ -118,7 +123,9 @@ export function ProductFormDialog({
         </>
       }
     >
-      {!categories ? (
+      {categoriesError ? (
+        <ErrorState error={categoriesError} onRetry={() => void refetchCategories()} />
+      ) : !categories ? (
         <div className="flex justify-center py-12">
           <Spinner label="Loading categories" />
         </div>
