@@ -55,6 +55,23 @@ describe("checkImageFile", () => {
 });
 
 describe("Product image upload (admin)", () => {
+  it("recovers from a failed category request in the product editor", async () => {
+    server.use(
+      http.get("*/api/admin/products/", () => HttpResponse.json(page([product]))),
+      http.get("*/api/admin/categories/", () => new HttpResponse(null, { status: 500 })),
+    );
+    const { user } = renderApp("/admin/products", { user: admin });
+    await user.click(await screen.findByRole("button", { name: `Edit ${product.name}` }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("We couldn't load this");
+    server.use(http.get("*/api/admin/categories/", () => HttpResponse.json(categories)));
+    await user.click(within(dialog).getByRole("button", { name: "Try again" }));
+    expect(await within(dialog).findByLabelText("Category")).toHaveValue(
+      String(product.category.id),
+    );
+    expect(within(dialog).getByLabelText("Name")).toHaveValue(product.name);
+  });
+
   it("uploads as multipart and shows the stored image", async () => {
     let contentType: string | null = null;
     let body = "";

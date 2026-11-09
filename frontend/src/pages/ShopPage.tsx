@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import { PackageSearch, SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useState, type SyntheticEvent } from "react";
+import { useEffect, useId, useRef, useState, type SyntheticEvent } from "react";
 import { useSearchParams } from "react-router";
 
 import { ProductGrid } from "@/components/store/ProductCard";
@@ -55,6 +55,7 @@ function Filters({
   onApplied?: () => void;
 }) {
   const { data: categories } = useCategories();
+  const filterId = useId();
   const [min, setMin] = useState(query.min_price ?? "");
   const [max, setMax] = useState(query.max_price ?? "");
 
@@ -106,11 +107,11 @@ function Filters({
       <form onSubmit={applyPrice}>
         <h2 className="mb-3 text-[13px] font-semibold text-muted">Price</h2>
         <div className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="min-price">
+          <label className="sr-only" htmlFor={`${filterId}-min-price`}>
             Minimum price
           </label>
           <input
-            id="min-price"
+            id={`${filterId}-min-price`}
             inputMode="decimal"
             placeholder="Min"
             value={min}
@@ -122,11 +123,11 @@ function Filters({
           <span className="text-subtle" aria-hidden>
             –
           </span>
-          <label className="sr-only" htmlFor="max-price">
+          <label className="sr-only" htmlFor={`${filterId}-max-price`}>
             Maximum price
           </label>
           <input
-            id="max-price"
+            id={`${filterId}-max-price`}
             inputMode="decimal"
             placeholder="Max"
             value={max}
@@ -176,6 +177,7 @@ export function ShopPage() {
   const { data, isLoading, isFetching, error, refetch } = useProducts(query);
   const { data: categories } = useCategories();
   const [showFilters, setShowFilters] = useState(false);
+  const filterToggle = useRef<HTMLButtonElement>(null);
 
   // Until the category list arrives, name the category from its slug, so the heading and the
   // filter chip render in their final place on the first paint (no layout shift).
@@ -215,6 +217,7 @@ export function ShopPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            ref={filterToggle}
             variant="outline"
             className="lg:hidden"
             icon={<SlidersHorizontal className="size-4" aria-hidden />}
@@ -288,6 +291,7 @@ export function ShopPage() {
             update={update}
             onApplied={() => {
               setShowFilters(false);
+              filterToggle.current?.focus();
             }}
           />
         </div>

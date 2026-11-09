@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/ui/buttonClasses";
+import { ErrorState } from "@/components/ui/EmptyState";
 import { ProductImage, Skeleton } from "@/components/ui/misc";
 import { useCart } from "@/hooks/queries";
 import { formatMoney } from "@/lib/format";
@@ -15,7 +16,7 @@ const PREVIEW_LINES = 3;
  */
 export function BagPanel({ onNavigate }: { onNavigate?: () => void }) {
   const { status } = useAuth();
-  const { data: cart, isLoading } = useCart();
+  const { data: cart, isLoading, error, refetch } = useCart();
 
   if (status !== "authenticated") {
     return (
@@ -31,6 +32,8 @@ export function BagPanel({ onNavigate }: { onNavigate?: () => void }) {
       </div>
     );
   }
+
+  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   if (isLoading || !cart) {
     return (

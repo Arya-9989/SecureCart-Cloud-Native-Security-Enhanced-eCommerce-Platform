@@ -25,15 +25,18 @@ function FieldShell({ id, label, error, hint, children, className }: FieldShellP
         {label}
       </label>
       {children}
-      {error ? (
-        <p
-          id={`${id}-error`}
-          className="mt-1.5 flex items-center gap-1.5 text-[13px] font-medium text-danger"
-        >
-          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-          {error}
-        </p>
-      ) : hint ? (
+      <div aria-live="polite" aria-atomic="true">
+        {error && (
+          <p
+            id={`${id}-error`}
+            className="mt-1.5 flex items-center gap-1.5 text-[13px] font-medium text-danger"
+          >
+            <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+            {error}
+          </p>
+        )}
+      </div>
+      {!error && hint ? (
         <p id={`${id}-hint`} className="mt-1.5 text-[13px] text-muted">
           {hint}
         </p>

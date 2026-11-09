@@ -21,6 +21,10 @@ RUN DJANGO_SECRET_KEY=collectstatic-only DJANGO_DEBUG=false \
 
 # ---- runtime: slim, non-root, no build tooling ---------------------------------------
 FROM python:3.12.15-slim AS runtime
+# Apply distro security fixes released after the base image was published.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"

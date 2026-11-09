@@ -1,9 +1,9 @@
 import { Loader2 } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
 
 import { buttonClasses, type Size, type Variant } from "./buttonClasses";
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ComponentPropsWithRef<"button"> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
@@ -25,7 +25,7 @@ export function Button({
     <button
       type={type}
       className={buttonClasses(variant, size, className)}
-      disabled={disabled ?? loading}
+      disabled={disabled === true || loading}
       aria-busy={loading || undefined}
       {...props}
     >
