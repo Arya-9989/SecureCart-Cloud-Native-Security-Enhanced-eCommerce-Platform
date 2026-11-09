@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -6,6 +6,19 @@ import { customer, makeCart, server } from "@/test/server";
 import { renderApp } from "@/test/utils";
 
 describe("Shop page", () => {
+  it("uses distinct filter labels and restores focus after applying mobile filters", async () => {
+    const { user } = renderApp("/shop");
+    const toggle = await screen.findByRole("button", { name: "Filters" });
+    await user.click(toggle);
+    const prices = screen.getAllByLabelText("Minimum price");
+    expect(prices).toHaveLength(2);
+    expect(prices[0]!.id).not.toBe(prices[1]!.id);
+    const mobile = document.getElementById("mobile-filters")!;
+    await user.click(within(mobile).getByRole("button", { name: "Apply price" }));
+    expect(toggle).toHaveFocus();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("lists products with stock states", async () => {
     renderApp("/shop");
     expect(await screen.findByRole("heading", { name: "All products" })).toBeInTheDocument();
@@ -155,6 +168,17 @@ describe("Cart page", () => {
 });
 
 describe("Bag drawer", () => {
+  it("offers retry when the bag request fails", async () => {
+    server.use(http.get("*/api/cart/", () => new HttpResponse(null, { status: 500 })));
+    const { user } = renderApp("/", { user: customer });
+    await user.click(await screen.findByRole("button", { name: /^Bag/ }));
+    const drawer = await screen.findByRole("dialog", { name: "Bag" });
+    expect(await within(drawer).findByRole("alert")).toHaveTextContent("We couldn't load this");
+    server.use(http.get("*/api/cart/", () => HttpResponse.json(makeCart())));
+    fireEvent.click(within(drawer).getByRole("button", { name: "Try again" }));
+    expect(await within(drawer).findByText("Aurora Wireless Headphones")).toBeInTheDocument();
+  });
+
   it("previews the bag from the global nav", async () => {
     const { user } = renderApp("/", { user: customer });
     const bag = await screen.findByRole("button", { name: "Bag, 1 item" });

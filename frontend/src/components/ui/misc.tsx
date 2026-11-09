@@ -115,7 +115,7 @@ export function QuantityStepper({
         onClick={() => {
           onChange(value - 1);
         }}
-        disabled={disabled ?? value <= min}
+        disabled={disabled === true || value <= min}
         aria-label="Decrease quantity"
       >
         <Minus className="size-4" aria-hidden />
@@ -135,7 +135,7 @@ export function QuantityStepper({
         onClick={() => {
           onChange(value + 1);
         }}
-        disabled={disabled ?? value >= max}
+        disabled={disabled === true || value >= max}
         aria-label="Increase quantity"
       >
         <Plus className="size-4" aria-hidden />
@@ -162,7 +162,7 @@ export function Pagination({
   const button =
     "inline-flex h-9 items-center gap-1 rounded-full border border-line-strong bg-surface px-4 text-[14px] font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-40 disabled:hover:bg-surface";
   return (
-    <nav aria-label="Pagination" className="flex items-center justify-between gap-4 pt-8">
+    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-4 pt-8">
       <p className="text-[14px] text-muted">
         <span className="font-medium text-fg tabular-nums">
           {from}–{to}
