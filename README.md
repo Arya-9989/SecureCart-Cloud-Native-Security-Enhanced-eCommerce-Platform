@@ -109,8 +109,8 @@ sequenceDiagram
     participant P as Payment provider
 
     C->>API: POST /api/checkout/ (Idempotency-Key)
-    API->>DB: BEGIN; SELECT products FOR UPDATE (ordered by id)
-    API->>DB: verify stock, decrement, create order (pending_payment); COMMIT
+    API->>DB: BEGIN, then SELECT products FOR UPDATE (ordered by id)
+    API->>DB: verify stock, decrement, create order (pending_payment), then COMMIT
     API->>P: charge(total, token, idempotency key)
     alt approved
         API->>DB: order -> paid, consume cart
